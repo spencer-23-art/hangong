@@ -1,0 +1,85 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/android-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build installable APK
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/hangong-release.jks
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Restore release signing key
+        if: ${{ env.KEYSTORE_B64 != '' }}
+        run: echo "$KEYSTORE_B64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
+
+      - name: Build release APK
+        id: apk_build
+        working-directory: android-app
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          gradle :app:assembleRelease --no-daemon 2>&1 | tee "$RUNNER_TEMP/peixun-android-build.log"
+          exit ${PIPESTATUS[0]}
+
+      - name: Surface build failure
+        if: ${{ steps.apk_build.outcome == 'failure' }}
+        shell: bash
+        run: |
+          summary=$(grep -E '(^ERROR:|^error:|^AAPT:|Android resource linking failed|resource .* not found|attribute .* not found)' "$RUNNER_TEMP/peixun-android-build.log" | tail -n 10 | tr '\n' ' ' | sed 's/%/%25/g' | cut -c1-900)
+          if [ -z "$summary" ]; then
+            summary=$(tail -n 12 "$RUNNER_TEMP/peixun-android-build.log" | tr '\n' ' ' | sed 's/%/%25/g' | cut -c1-900)
+          fi
+          echo "::error title=APK build failed::${summary}"
+          exit 1
+
+      - name: Upload build diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hangong-mobile-build-log-${{ github.run_number }}
+          path: ${{ runner.temp }}/peixun-android-build.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Verify APK signature
+        working-directory: android-app
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print -quit)"
+          "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: hangong-mobile-apk-${{ github.run_number }}
+          path: android-app/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 90

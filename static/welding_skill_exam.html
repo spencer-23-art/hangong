@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>焊接技能考试</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#18233a; --line:rgba(255,255,255,.13); --text:#f8fafc; --muted:#94a3b8; --red:#ef4444; --green:#22c55e; --blue:#3b82f6; }
+    * { box-sizing:border-box; }
+    html, body { width:100%; min-height:100%; margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif; }
+    body { display:flex; justify-content:center; }
+    .page { width:100%; max-width:760px; min-height:100dvh; padding:calc(14px + env(safe-area-inset-top)) 16px calc(20px + env(safe-area-inset-bottom)); }
+    .header { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+    .back { width:38px; height:38px; border:1px solid var(--line); color:var(--text); background:rgba(255,255,255,.05); border-radius:9px; font-size:22px; cursor:pointer; }
+    h1 { margin:0; font-size:20px; } .subtitle { margin:4px 0 0; color:var(--muted); font-size:13px; }
+    .photo-collection { display:flex; gap:10px; overflow-x:auto; padding:4px 2px 2px; min-height:92px; }
+    .thumb, .add-photo { position:relative; width:82px; height:82px; flex:0 0 82px; overflow:hidden; border:1px solid var(--line); border-radius:9px; background:var(--panel); }
+    .thumb img { display:block; width:100%; height:100%; object-fit:cover; } .thumb button { position:absolute; right:2px; top:2px; width:21px; height:21px; padding:0; border:0; border-radius:50%; background:rgba(0,0,0,.72); color:#fff; cursor:pointer; font-size:16px; line-height:18px; }
+    .add-photo { display:flex; align-items:center; justify-content:center; border-style:dashed; color:var(--muted); font-size:36px; cursor:pointer; }
+    .add-photo:disabled { opacity:.42; cursor:not-allowed; }
+    .photo-hint { margin:8px 2px 0; color:var(--muted); font-size:13px; }
+    .confirm-photos { width:100%; margin-top:14px; padding:12px; border:1px solid rgba(59,130,246,.6); border-radius:10px; background:rgba(59,130,246,.16); color:#dbeafe; font-weight:700; font-size:15px; cursor:pointer; }
+    .confirm-photos:disabled { opacity:.48; cursor:not-allowed; }
+    .confirmed-note { display:none; margin-top:12px; color:#86efac; font-size:13px; text-align:center; }
+    .result-panel { margin-top:16px; padding:15px; border:1px solid var(--line); border-radius:14px; background:rgba(255,255,255,.025); }
+    .result-title { margin:0 0 10px; font-weight:700; font-size:16px; } .result-tip { margin:0 0 12px; color:var(--muted); font-size:13px; }
+    .result-buttons { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .result-button { min-height:47px; border:1px solid transparent; border-radius:9px; color:#fff; font-size:16px; font-weight:700; cursor:pointer; }
+    .result-button:disabled { opacity:.38; cursor:not-allowed; } .qualified { background:rgba(34,197,94,.18); border-color:rgba(34,197,94,.75); } .unqualified { background:rgba(239,68,68,.18); border-color:rgba(239,68,68,.85); }
+    .defect-box { display:none; margin-top:13px; } .defect-box.visible { display:block; }
+    textarea { width:100%; min-height:90px; resize:vertical; padding:11px; border:1px solid var(--line); border-radius:9px; background:#0b1220; color:var(--text); font:inherit; }
+    .defect-confirm { width:100%; margin-top:9px; padding:11px; border:0; border-radius:9px; background:var(--red); color:white; font-weight:700; cursor:pointer; }
+    .notice { min-height:20px; margin:12px 0 0; font-size:13px; text-align:center; color:var(--muted); } .notice.error { color:#fca5a5; } .notice.success { color:#86efac; }
+    .saving { position:fixed; inset:0; z-index:20; display:none; place-items:center; background:rgba(2,6,23,.72); padding:20px; } .saving.visible { display:grid; } .saving div { padding:20px 24px; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
+    .ndt-choice { position:fixed; inset:0; z-index:15; display:none; place-items:center; padding:20px; background:rgba(2,6,23,.72); }
+    .ndt-choice.visible { display:grid; } .ndt-choice-card { width:min(100%,360px); padding:20px; border:1px solid var(--line); border-radius:14px; background:var(--panel); text-align:center; }
+    .ndt-choice-card h3 { margin:0 0 8px; font-size:18px; } .ndt-choice-card p { margin:0 0 16px; color:var(--muted); font-size:14px; }
+    .ndt-choice-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .ndt-choice-actions button { min-height:42px; border:0; border-radius:9px; color:#fff; font-weight:700; cursor:pointer; }
+    .ndt-no { background:var(--green); } .ndt-yes { background:var(--blue); }
+    @media (min-width:680px) { .page { padding-left:22px; padding-right:22px; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <button class="back" type="button" aria-label="返回" onclick="goBack()">‹</button>
+      <div><h1>焊接技能考试</h1><p class="subtitle">每次点击拍一张，全部拍完后一次确认</p></div>
+    </header>
+
+    <input id="photo-input" type="file" accept="image/*" capture="environment" hidden>
+    <div class="photo-collection" id="photo-collection">
+      <button class="add-photo" id="capture-button" type="button" aria-label="拍摄考试照片" disabled>+</button>
+    </div>
+    <p class="photo-hint">点击“+”拍一张考试过程照片，可重复添加多张。</p>
+    <button class="confirm-photos" id="confirm-photos" type="button" disabled>确认本次拍摄照片</button>
+    <div class="confirmed-note" id="confirmed-note">照片已确认，请选择考试结果。</div>
+
+    <section class="result-panel">
+      <h2 class="result-title">考试结果</h2>
+      <p class="result-tip" id="result-tip">请先拍摄并确认考试过程照片。</p>
+      <div class="result-buttons">
+        <button class="result-button qualified" id="qualified-button" type="button" disabled>合格</button>
+        <button class="result-button unqualified" id="unqualified-button" type="button" disabled>不合格</button>
+      </div>
+      <div class="defect-box" id="defect-box">
+        <label for="defect-issues">缺陷问题 *</label>
+        <textarea id="defect-issues" maxlength="1000" placeholder="请填写焊接缺陷或不合格原因"></textarea>
+        <button class="defect-confirm" id="defect-confirm" type="button">确认不合格并结束考试</button>
+      </div>
+    </section>
+    <p class="notice" id="notice"></p>
+  </main>
+  <div class="ndt-choice" id="ndt-choice"><div class="ndt-choice-card"><h3>考试合格</h3><p>本次焊接是否需要探伤？</p><div class="ndt-choice-actions"><button class="ndt-no" id="ndt-no" type="button">不需要</button><button class="ndt-yes" id="ndt-yes" type="button">需要探伤</button></div></div></div>
+  <div class="saving" id="saving"><div>正在保存考试记录，请稍候…</div></div>
+
+  <script>
+    const getSessionItem = (key) => sessionStorage.getItem(key) || localStorage.getItem(key);
+    const token = getSessionItem('token');
+    const role = getSessionItem('role');
+    const recordId = Number(new URLSearchParams(location.search).get('record_id'));
+    const captureButton = document.getElementById('capture-button');
+    const photoInput = document.getElementById('photo-input');
+    const confirmButton = document.getElementById('confirm-photos');
+    const qualifiedButton = document.getElementById('qualified-button');
+    const unqualifiedButton = document.getElementById('unqualified-button');
+    const defectBox = document.getElementById('defect-box');
+    const notice = document.getElementById('notice');
+    const photos = [];
+    let photosConfirmed = false;
+
+    function setNotice(message, type = '') { notice.textContent = message; notice.className = `notice ${type}`; }
+    function goBack() { history.length > 1 ? history.back() : location.replace('/client'); }
+    function updatePhotoList() {
+      const collection = document.getElementById('photo-collection');
+      confirmButton.disabled = !photos.length || photosConfirmed;
+      collection.innerHTML = photos.map((photo, index) => `<div class="thumb"><img src="${photo.url}" alt="考试照片 ${index + 1}"><button type="button" aria-label="删除第${index + 1}张照片" onclick="removePhoto(${index})">×</button></div>`).join('') + `<button class="add-photo" id="capture-button" type="button" aria-label="拍摄考试照片" ${photosConfirmed || photos.length >= 60 ? 'disabled' : ''}>+</button>`;
+      document.getElementById('capture-button').addEventListener('click', () => { if (!photosConfirmed) photoInput.click(); });
+    }
+    function removePhoto(index) {
+      if (photosConfirmed) return;
+      const [removed] = photos.splice(index, 1);
+      if (removed) URL.revokeObjectURL(removed.url);
+      updatePhotoList();
+    }
+    async function compressImageFile(file) {
+      const sourceUrl = URL.createObjectURL(file);
+      const source = new Image();
+      await new Promise((resolve, reject) => { source.onload = resolve; source.onerror = reject; source.src = sourceUrl; });
+      let targetWidth = Math.min(source.naturalWidth, 1600);
+      let targetHeight = Math.round(source.naturalHeight * targetWidth / source.naturalWidth);
+      for (let scaleStep = 0; scaleStep < 6; scaleStep++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth; canvas.height = targetHeight;
+        canvas.getContext('2d').drawImage(source, 0, 0, targetWidth, targetHeight);
+        for (let quality = 0.84; quality >= 0.4; quality -= 0.08) {
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+          if (blob && blob.size <= 200 * 1024) { URL.revokeObjectURL(sourceUrl); return blob; }
+        }
+        targetWidth = Math.round(targetWidth * 0.82); targetHeight = Math.round(targetHeight * 0.82);
+      }
+      URL.revokeObjectURL(sourceUrl);
+      throw new Error('照片压缩后仍超过 200KB，请靠近拍摄对象后重试');
+    }
+    async function handleSelectedPhoto(event) {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file || photosConfirmed) return;
+      if (photos.length >= 60) { setNotice('一次考试最多可拍摄60张照片。', 'error'); return; }
+      const activeCaptureButton = document.getElementById('capture-button');
+      if (activeCaptureButton) activeCaptureButton.disabled = true;
+      try {
+        const blob = await compressImageFile(file);
+        photos.push({ blob, url: URL.createObjectURL(blob) });
+        updatePhotoList();
+        setNotice(`已保存第 ${photos.length} 张照片，可继续拍摄。`, 'success');
+      } catch (error) { setNotice(error.message || '拍摄失败，请重试。', 'error'); }
+      finally {
+        const latestCaptureButton = document.getElementById('capture-button');
+        if (latestCaptureButton && !photosConfirmed) latestCaptureButton.disabled = false;
+      }
+    }
+    function confirmPhotos() {
+      if (!photos.length) return;
+      photosConfirmed = true;
+      confirmButton.disabled = true;
+      document.getElementById('confirmed-note').style.display = 'block';
+      document.getElementById('result-tip').textContent = '请确认本次焊接技能考试结果。';
+      qualifiedButton.disabled = false; unqualifiedButton.disabled = false;
+      updatePhotoList();
+      setNotice(`已确认 ${photos.length} 张考试照片。`, 'success');
+    }
+    async function submitExam(result, requiresNdt = false) {
+      const defects = document.getElementById('defect-issues').value.trim();
+      if (result === 'unqualified' && !defects) { setNotice('请填写缺陷问题。', 'error'); return; }
+      const formData = new FormData();
+      formData.append('record_id', String(recordId)); formData.append('result', result); formData.append('defect_issues', defects); formData.append('requires_ndt', String(requiresNdt));
+      photos.forEach((photo, index) => formData.append('photos', photo.blob, `welding_exam_${index + 1}.jpg`));
+      document.getElementById('saving').classList.add('visible');
+      try {
+        const response = await fetch('/api/welding-skill-exam', { method:'POST', headers:{ Authorization: token }, body:formData });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || '考试保存失败，请重试');
+        setNotice(result === 'qualified' ? (requiresNdt ? '考试合格，等待探伤。' : '考试合格，考试已结束。') : '不合格原因已记录，考试已结束。', 'success');
+        setTimeout(() => location.replace('/client'), 900);
+      } catch (error) { setNotice(error.message || '考试保存失败，请重试。', 'error'); }
+      finally { document.getElementById('saving').classList.remove('visible'); }
+    }
+    function startPage() {
+      if (!token || role !== 'admin' || !recordId || recordId < 1) {
+        captureButton.disabled = true;
+        setNotice('仅管理员或二级管理员可以进行考试。', 'error');
+        return;
+      }
+      captureButton.disabled = false;
+    }
+    captureButton.addEventListener('click', () => { if (!photosConfirmed) photoInput.click(); });
+    photoInput.addEventListener('change', handleSelectedPhoto);
+    confirmButton.addEventListener('click', confirmPhotos);
+    qualifiedButton.addEventListener('click', () => document.getElementById('ndt-choice').classList.add('visible'));
+    document.getElementById('ndt-no').addEventListener('click', () => submitExam('qualified', false));
+    document.getElementById('ndt-yes').addEventListener('click', () => submitExam('qualified', true));
+    unqualifiedButton.addEventListener('click', () => { defectBox.classList.add('visible'); document.getElementById('defect-issues').focus(); });
+    document.getElementById('defect-confirm').addEventListener('click', () => submitExam('unqualified'));
+    startPage();
+  </script>
+</body>
+</html>

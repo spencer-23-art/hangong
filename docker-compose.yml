@@ -1,0 +1,38 @@
+services:
+  hangong-redis:
+    image: redis:7-alpine
+    container_name: hangong-redis
+    restart: unless-stopped
+
+  hangong-worker:
+    build: .
+    container_name: hangong-worker
+    command: celery -A app.celery_app worker --loglevel=info --pool=solo
+    environment:
+      REDIS_URL: redis://hangong-redis:6379/0
+      DB_PATH: hangong.db
+    volumes:
+      - /data/hangong/uploads:/app/uploads
+      - /data/hangong/shiti:/app/shiti
+      - /data/hangong/hangong.db:/app/hangong.db
+    depends_on:
+      - hangong-redis
+    restart: unless-stopped
+
+  hangong-app:
+    build: .
+    container_name: hangong-app
+    ports:
+      - "9000:8000"
+    environment:
+      HANGONG_SECRET_KEY: ${HANGONG_SECRET_KEY:?Set HANGONG_SECRET_KEY in .env}
+      REDIS_URL: redis://hangong-redis:6379/0
+      DB_PATH: hangong.db
+    volumes:
+      - /data/hangong/uploads:/app/uploads
+      - /data/hangong/shiti:/app/shiti
+      - /data/hangong/hangong.db:/app/hangong.db
+    depends_on:
+      - hangong-redis
+      - hangong-worker
+    restart: unless-stopped

@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+python-multipart
+openpyxl
+python-docx
+rapidocr_onnxruntime
+modelscope
+opencv-python-headless
+pyyaml
+numpy
+celery
+redis<5.0.0
+Pillow
+aiofiles
+document-preprocessor
