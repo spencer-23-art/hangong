@@ -1185,9 +1185,12 @@
       try {
         let url = '/api/records';
         if (searchName) {
-          url += '?name=' + encodeURIComponent(searchName);
+          url += '?name=' + encodeURIComponent(searchName) + '&_=' + Date.now();
+        } else {
+          url += '?_=' + Date.now();
         }
         const response = await fetch(url, {
+          cache: 'no-store',
           headers: {
             'Authorization': token
           }
@@ -1220,6 +1223,8 @@
               examAction = `<button type="button" class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px;" onclick="startNdt(${row.id})">待探伤</button>`;
             } else if (row.latest_welding_exam_result === 'qualified') {
               examAction = `<button type="button" class="btn btn-success history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; opacity: 0.9; cursor: default;" disabled>合格</button>`;
+            } else if (row.latest_welding_exam_result === 'unqualified' && Number(row.welding_exam_count) >= 2) {
+              examAction = `<button type="button" class="btn btn-danger history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; opacity: 0.9; cursor: default;" disabled>不合格</button>`;
             } else {
               examAction = '';
             }
@@ -1792,10 +1797,8 @@
 
 
 
-          // 若在历史页签，重载数据
-          if (activeTab === 'history') {
-            loadHistory();
-          }
+          // 每次保存后都刷新历史缓存，切到历史页即可立即看到最新记录。
+          await loadHistory();
         } else {
           showAlert('error', result.detail || '提交录入数据失败，请重试');
         }

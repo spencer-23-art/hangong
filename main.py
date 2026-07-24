@@ -1761,6 +1761,11 @@ def get_user_records(name: str = None, current_user = Depends(get_current_user))
              ORDER BY w.id DESC
              LIMIT 1
            ) AS latest_welding_ndt_status
+           ,(
+             SELECT COUNT(*)
+             FROM welding_skill_exams w
+             WHERE w.record_id = r.id
+           ) AS welding_exam_count
     FROM records r
     WHERE {" AND ".join(conditions)}
     ORDER BY r.created_at DESC
@@ -1820,6 +1825,16 @@ async def save_welding_skill_exam(
         record = cursor.fetchone()
         if not record:
             raise HTTPException(status_code=404, detail="人员记录不存在")
+
+        cursor.execute(
+            "SELECT result FROM welding_skill_exams WHERE record_id = ? ORDER BY id ASC",
+            (record_id,)
+        )
+        prior_attempts = cursor.fetchall()
+        if len(prior_attempts) >= 2:
+            raise HTTPException(status_code=409, detail="该人员已完成初考和一次补考，不能再次补考")
+        if prior_attempts and prior_attempts[-1]['result'] == 'qualified':
+            raise HTTPException(status_code=409, detail="该人员考试已合格，不能再次参加考试")
 
         photo_dir = os.path.join(UPLOAD_DIR, 'welding_skill_exams', str(record_id), uuid.uuid4().hex)
         written_paths = []
@@ -2317,7 +2332,8 @@ def get_all_records(start_date: str = None, end_date: str = None, company: str =
         query = f'''
         SELECT r.*, u.real_name as recorder_name,
                (SELECT w.result FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_exam_result,
-               (SELECT w.ndt_status FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_status
+                (SELECT w.ndt_status FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_status,
+                (SELECT COUNT(*) FROM welding_skill_exams w WHERE w.record_id = r.id) AS welding_exam_count
         FROM records r 
         LEFT JOIN users u ON r.user_id = u.id 
         {where_clause}
@@ -2330,7 +2346,8 @@ def get_all_records(start_date: str = None, end_date: str = None, company: str =
         query = f'''
         SELECT r.*, u.real_name as recorder_name,
                (SELECT w.result FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_exam_result,
-               (SELECT w.ndt_status FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_status
+                (SELECT w.ndt_status FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_status,
+                (SELECT COUNT(*) FROM welding_skill_exams w WHERE w.record_id = r.id) AS welding_exam_count
         FROM records r 
         LEFT JOIN users u ON r.user_id = u.id 
         {where_clause}

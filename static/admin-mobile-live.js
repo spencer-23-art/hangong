@@ -180,6 +180,8 @@
       examAction = '<button class="small-action" type="button" disabled>待探伤</button>';
     } else if (r.latest_welding_exam_result === 'qualified') {
       examAction = '<button class="small-action success-action" type="button" disabled>合格</button>';
+    } else if (r.latest_welding_exam_result === 'unqualified' && Number(r.welding_exam_count) >= 2) {
+      examAction = '<button class="small-action danger-action" type="button" disabled>不合格</button>';
     } else {
       examAction = '<button class="small-action danger-action" type="button" onclick="startWeldingSkillExam(' + Number(r.id) + ')">' + (r.latest_welding_exam_result === 'unqualified' ? '补考' : '考试') + '</button>';
     }

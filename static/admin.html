@@ -2301,6 +2301,8 @@
           weldingExamAction = '<button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>待探伤</button>';
         } else if (r.latest_welding_exam_result === 'qualified') {
           weldingExamAction = '<button class="btn btn-success" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>合格</button>';
+        } else if (r.latest_welding_exam_result === 'unqualified' && Number(r.welding_exam_count) >= 2) {
+          weldingExamAction = '<button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>不合格</button>';
         } else {
           const label = r.latest_welding_exam_result === 'unqualified' ? '补考' : '考试';
           weldingExamAction = `<button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" onclick="startWeldingSkillExam(${r.id})">${label}</button>`;
