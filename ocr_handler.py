@@ -1006,7 +1006,7 @@ def generate_record_card(record_data, id_card_img_path):
     record_data: dict, 必须包含 姓名, 性别, 年龄, 联系电话, 岗位, 常住地址
     id_card_img_path: 裁剪后的身份证路径
     """
-    template_path = '登记卡.docx'
+    template_path = os.environ.get('RECORD_CARD_TEMPLATE', 'record_card_template.docx')
     
     # 自动备份/提取桌面的登记卡模板
     if not os.path.exists(template_path):

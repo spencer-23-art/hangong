@@ -29,11 +29,11 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r re
 COPY main.py ocr_handler.py start_server.py /app/
 COPY app/ /app/app/
 COPY static/ /app/static/
-COPY 登记卡.docx /app/
+COPY *.docx /tmp/templates/
+RUN set -eux; template="$(find /tmp/templates -maxdepth 1 -name '*.docx' -print -quit)"; test -n "$template"; cp "$template" /app/record_card_template.docx
 
 # 容器内部暴露 8000 端口
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-
 

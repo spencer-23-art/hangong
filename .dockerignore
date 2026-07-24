@@ -16,5 +16,3 @@ shiti
 *.zip
 excel报表.xlsx
 debug_*.html
-*.docx
-!登记卡.docx
