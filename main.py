@@ -687,6 +687,8 @@ def init_db():
         certificate_work_item TEXT DEFAULT '',
         certificate_expiry TEXT DEFAULT '',
         welder_code TEXT DEFAULT '',
+        team TEXT DEFAULT '',
+        exit_date TEXT DEFAULT '',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )
@@ -752,7 +754,7 @@ def init_db():
         conn.commit()
     except sqlite3.OperationalError:
         pass
-    for column in ('exam_project', 'certificate_work_item', 'certificate_expiry', 'welder_code'):
+    for column in ('exam_project', 'certificate_work_item', 'certificate_expiry', 'welder_code', 'team', 'exit_date'):
         try:
             cursor.execute(f"ALTER TABLE records ADD COLUMN {column} TEXT DEFAULT ''")
             conn.commit()
@@ -894,6 +896,7 @@ def init_db():
         certificate_work_item TEXT DEFAULT '',
         certificate_expiry TEXT DEFAULT '',
         welder_code TEXT DEFAULT '',
+        team TEXT DEFAULT '',
         photo_path TEXT,
         id_card_img_path TEXT,
         status TEXT NOT NULL DEFAULT 'pending',
@@ -907,7 +910,7 @@ def init_db():
         cursor.execute("ALTER TABLE record_updates ADD COLUMN remark TEXT DEFAULT ''")
     except sqlite3.OperationalError:
         pass
-    for column in ('exam_project', 'certificate_work_item', 'certificate_expiry', 'welder_code'):
+    for column in ('exam_project', 'certificate_work_item', 'certificate_expiry', 'welder_code', 'team'):
         try:
             cursor.execute(f"ALTER TABLE record_updates ADD COLUMN {column} TEXT DEFAULT ''")
         except sqlite3.OperationalError:
@@ -1629,6 +1632,7 @@ async def create_record(
     certificate_work_item: str = Form(""),
     certificate_expiry: str = Form(""),
     welder_code: str = Form(""),
+    team: str = Form(""),
     remark: str = Form(""),
     id_card_img_path: str = Form(None),
     photo: UploadFile = File(...),
@@ -1670,9 +1674,9 @@ async def create_record(
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
-    INSERT INTO records (user_id, photo_path, name, nation, id_card, phone, address, job, education, region_auth, exam_project, certificate_work_item, certificate_expiry, welder_code, gender, age, company, remark, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (current_user['id'], photo_path, name, nation, id_card, phone, address, job, education, region_auth, exam_project, certificate_work_item, certificate_expiry, welder_code, gender, age, current_user['company'].strip(), remark, beijing_now().strftime("%Y-%m-%d %H:%M:%S")))
+    INSERT INTO records (user_id, photo_path, name, nation, id_card, phone, address, job, education, region_auth, exam_project, certificate_work_item, certificate_expiry, welder_code, team, gender, age, company, remark, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (current_user['id'], photo_path, name, nation, id_card, phone, address, job, education, region_auth, exam_project, certificate_work_item, certificate_expiry, welder_code, team.strip(), gender, age, current_user['company'].strip(), remark, beijing_now().strftime("%Y-%m-%d %H:%M:%S")))
     record_id = cursor.lastrowid
     try:
         if prepared_site_photos[0] or prepared_site_photos[1]:
@@ -1927,6 +1931,36 @@ async def complete_welding_ndt(
     return {"code": 200, "message": "探伤合格已保存", "photo_count": len(written_paths)}
 
 # 修改已录入的信息（仅能修改属于自己的记录）
+@app.post("/api/record/exit")
+def confirm_record_exit(record_id: int = Form(...), exit_date: str = Form(...), current_user = Depends(get_current_user)):
+    if current_user['role'] == 'admin':
+        raise HTTPException(status_code=403, detail="退场只能由录入人员在客户端历史中确认")
+    try:
+        datetime.strptime(exit_date, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="请选择正确的退场日期")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, exit_date FROM records WHERE id = ? AND user_id = ?", (record_id, current_user['id']))
+    record = cursor.fetchone()
+    if not record:
+        conn.close()
+        raise HTTPException(status_code=403, detail="无权操作此人员记录")
+    if record['exit_date']:
+        conn.close()
+        raise HTTPException(status_code=409, detail="退场日期已确认，不能重复修改")
+    cursor.execute("SELECT result, ndt_status FROM welding_skill_exams WHERE record_id = ? ORDER BY id DESC LIMIT 1", (record_id,))
+    exam = cursor.fetchone()
+    if not exam or exam['result'] != 'qualified' or exam['ndt_status'] not in ('qualified', 'not_required'):
+        conn.close()
+        raise HTTPException(status_code=400, detail="仅考试合格且探伤已完成（或无需探伤）的人员可以退场")
+    cursor.execute("UPDATE records SET exit_date = ? WHERE id = ?", (exit_date, record_id))
+    conn.commit()
+    conn.close()
+    return {"code": 200, "message": "退场日期已确认"}
+
+
 @app.post("/api/record/update")
 async def update_record(
     record_id: int = Form(...),
@@ -1942,6 +1976,7 @@ async def update_record(
     certificate_work_item: str = Form(None),
     certificate_expiry: str = Form(None),
     welder_code: str = Form(None),
+    team: str = Form(None),
     remark: str = Form(""),
     id_card_img_path: str = Form(None),
     photo: UploadFile = File(None),
@@ -1973,6 +2008,12 @@ async def update_record(
         conn.close()
         raise HTTPException(status_code=403, detail="无权修改此记录，或记录不存在")
 
+    cursor.execute("SELECT result, ndt_status FROM welding_skill_exams WHERE record_id = ? ORDER BY id DESC LIMIT 1", (record_id,))
+    latest_exam = cursor.fetchone()
+    if latest_exam and latest_exam['result'] == 'qualified' and latest_exam['ndt_status'] in ('qualified', 'not_required'):
+        conn.close()
+        raise HTTPException(status_code=403, detail="该人员已合格，信息已锁定，不能修改")
+
     # The client no longer exposes nation and education; preserve any legacy values on edit.
     nation = (record['nation'] if nation is None else nation) or ''
     education = (record['education'] if education is None else education) or ''
@@ -1980,6 +2021,7 @@ async def update_record(
     certificate_work_item = (record['certificate_work_item'] if certificate_work_item is None else certificate_work_item) or ''
     certificate_expiry = (record['certificate_expiry'] if certificate_expiry is None else certificate_expiry) or ''
     welder_code = (record['welder_code'] if welder_code is None else welder_code) or ''
+    team = (record['team'] if team is None else team) or ''
     site_photo_paths, removed_site_photos = _remove_site_photo_paths(
         record['site_photo_paths'], removed_site_photo_paths
     )
@@ -2017,11 +2059,11 @@ async def update_record(
         # 4. 插入修改申请表
         cursor.execute('''
         INSERT INTO record_updates (
-            record_id, user_id, name, nation, id_card, phone, address, job, education, region_auth, exam_project, certificate_work_item, certificate_expiry, welder_code, remark, photo_path, id_card_img_path, status, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+            record_id, user_id, name, nation, id_card, phone, address, job, education, region_auth, exam_project, certificate_work_item, certificate_expiry, welder_code, team, remark, photo_path, id_card_img_path, status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
         ''', (
             record_id, current_user['id'], name.strip(), nation.strip(), id_card.strip(), phone.strip(),
-            address.strip(), job.strip(), education.strip(), region_auth.strip(), exam_project.strip(), certificate_work_item.strip(), certificate_expiry.strip(), welder_code.strip(), remark, temp_photo_path, temp_id_card_img_path,
+            address.strip(), job.strip(), education.strip(), region_auth.strip(), exam_project.strip(), certificate_work_item.strip(), certificate_expiry.strip(), welder_code.strip(), team.strip(), remark, temp_photo_path, temp_id_card_img_path,
             beijing_now().strftime("%Y-%m-%d %H:%M:%S")
         ))
         conn.commit()
@@ -2092,9 +2134,9 @@ async def update_record(
             
     cursor.execute('''
     UPDATE records 
-    SET name = ?, nation = ?, id_card = ?, phone = ?, address = ?, job = ?, education = ?, region_auth = ?, exam_project = ?, certificate_work_item = ?, certificate_expiry = ?, welder_code = ?, remark = ?, gender = ?, age = ?, photo_path = ?, word_path = ?, site_photo_paths = ?
+    SET name = ?, nation = ?, id_card = ?, phone = ?, address = ?, job = ?, education = ?, region_auth = ?, exam_project = ?, certificate_work_item = ?, certificate_expiry = ?, welder_code = ?, team = ?, remark = ?, gender = ?, age = ?, photo_path = ?, word_path = ?, site_photo_paths = ?
     WHERE id = ? AND user_id = ?
-    ''', (name, nation, id_card, phone, address, job, education, region_auth, exam_project, certificate_work_item, certificate_expiry, welder_code, remark, gender, age, photo_path, new_word_path, site_photo_paths, record_id, current_user['id']))
+    ''', (name, nation, id_card, phone, address, job, education, region_auth, exam_project, certificate_work_item, certificate_expiry, welder_code, team, remark, gender, age, photo_path, new_word_path, site_photo_paths, record_id, current_user['id']))
     
     conn.commit()
     conn.close()
@@ -2128,6 +2170,7 @@ async def admin_update_record(
     certificate_work_item: str = Form(""),
     certificate_expiry: str = Form(""),
     welder_code: str = Form(""),
+    team: str = Form(""),
     remark: str = Form(""),
     id_card_img_path: str = Form(None),
     photo: UploadFile = File(None),
@@ -2219,9 +2262,9 @@ async def admin_update_record(
             
     cursor.execute('''
     UPDATE records 
-    SET name = ?, nation = ?, id_card = ?, phone = ?, address = ?, job = ?, education = ?, region_auth = ?, exam_project = ?, certificate_work_item = ?, certificate_expiry = ?, welder_code = ?, remark = ?, gender = ?, age = ?, photo_path = ?, word_path = ?
+    SET name = ?, nation = ?, id_card = ?, phone = ?, address = ?, job = ?, education = ?, region_auth = ?, exam_project = ?, certificate_work_item = ?, certificate_expiry = ?, welder_code = ?, team = ?, remark = ?, gender = ?, age = ?, photo_path = ?, word_path = ?
     WHERE id = ?
-    ''', (name, nation, id_card, phone, address, job, education, region_auth, exam_project, certificate_work_item, certificate_expiry, welder_code, remark, gender, age, photo_path, new_word_path, record_id))
+    ''', (name, nation, id_card, phone, address, job, education, region_auth, exam_project, certificate_work_item, certificate_expiry, welder_code, team.strip(), remark, gender, age, photo_path, new_word_path, record_id))
     
     conn.commit()
     conn.close()
@@ -2929,11 +2972,11 @@ def get_record_updates(admin = Depends(get_admin_user)):
             ru.id as update_id, ru.record_id, ru.user_id, ru.status, ru.created_at as apply_time,
             ru.name as new_name, ru.nation as new_nation, ru.id_card as new_id_card, ru.phone as new_phone,
             ru.address as new_address, ru.job as new_job, ru.education as new_education, ru.region_auth as new_region_auth,
-            ru.exam_project as new_exam_project, ru.certificate_work_item as new_certificate_work_item, ru.certificate_expiry as new_certificate_expiry, ru.welder_code as new_welder_code, ru.remark as new_remark,
+            ru.exam_project as new_exam_project, ru.certificate_work_item as new_certificate_work_item, ru.certificate_expiry as new_certificate_expiry, ru.welder_code as new_welder_code, ru.team as new_team, ru.remark as new_remark,
             ru.photo_path as new_photo_path, ru.id_card_img_path as new_id_card_img_path,
             r.name as old_name, r.nation as old_nation, r.id_card as old_id_card, r.phone as old_phone,
             r.address as old_address, r.job as old_job, r.education as old_education, r.region_auth as old_region_auth,
-            r.exam_project as old_exam_project, r.certificate_work_item as old_certificate_work_item, r.certificate_expiry as old_certificate_expiry, r.welder_code as old_welder_code, r.remark as old_remark,
+            r.exam_project as old_exam_project, r.certificate_work_item as old_certificate_work_item, r.certificate_expiry as old_certificate_expiry, r.welder_code as old_welder_code, r.team as old_team, r.remark as old_remark,
             r.photo_path as old_photo_path, r.word_path as old_word_path,
             COALESCE(NULLIF(r.company, ''), u.company, '') as old_company
         FROM record_updates ru
@@ -3032,11 +3075,11 @@ def approve_record_update(update_id: int, admin = Depends(get_admin_user)):
     # 更新 records 记录
     cursor.execute('''
         UPDATE records 
-        SET name = ?, nation = ?, id_card = ?, phone = ?, address = ?, job = ?, education = ?, region_auth = ?, exam_project = ?, certificate_work_item = ?, certificate_expiry = ?, welder_code = ?, remark = ?, gender = ?, age = ?, photo_path = ?, word_path = ?
+        SET name = ?, nation = ?, id_card = ?, phone = ?, address = ?, job = ?, education = ?, region_auth = ?, exam_project = ?, certificate_work_item = ?, certificate_expiry = ?, welder_code = ?, team = ?, remark = ?, gender = ?, age = ?, photo_path = ?, word_path = ?
         WHERE id = ?
     ''', (
         update_req['name'], update_req['nation'], new_id_card, update_req['phone'], update_req['address'],
-        update_req['job'], update_req['education'], update_req['region_auth'], update_req['exam_project'], update_req['certificate_work_item'], update_req['certificate_expiry'], update_req['welder_code'], update_req['remark'], gender, age, final_photo_path, new_word_path,
+        update_req['job'], update_req['education'], update_req['region_auth'], update_req['exam_project'], update_req['certificate_work_item'], update_req['certificate_expiry'], update_req['welder_code'], update_req['team'], update_req['remark'], gender, age, final_photo_path, new_word_path,
         record_id
     ))
     

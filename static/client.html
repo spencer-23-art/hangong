@@ -125,17 +125,19 @@
     .history-details-cell { vertical-align: middle; }
     .history-details-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 6px 12px;
-      min-width: 410px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 4px 9px;
+      min-width: 480px;
     }
-    .history-info-item { display: flex; align-items: center; min-width: 0; gap: 4px; line-height: 1.25; font-size: 0.8rem; }
+    .history-info-item { display: flex; align-items: center; min-width: 0; gap: 3px; line-height: 1.2; font-size: 0.76rem; }
     .history-info-label { flex: 0 0 auto; color: var(--text-muted); }
     .history-info-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main); }
-    .history-info-name { font-weight: 700; font-size: 0.9rem; }
-    .history-info-id { grid-column: span 2; font-family: monospace; }
+    .history-info-name { font-weight: 700; font-size: 0.84rem; }
+    .history-info-id { font-family: monospace; }
     .history-info-address { grid-column: 1 / -1; align-items: flex-start; }
     .history-info-address .history-info-value { white-space: normal; word-break: break-all; }
+    .history-exit-control { display:flex; align-items:center; justify-content:center; gap:4px; flex-wrap:wrap; }
+    .history-exit-date { width:118px; height:29px; padding:3px 5px; font-size:.74rem; }
     @media (max-width: 640px) {
       .photo-uploader-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
       .photo-uploader-row .photo-uploader { width: 100% !important; height: clamp(128px, 42vw, 200px) !important; margin: 0 !important; }
@@ -503,6 +505,10 @@
               <select id="region_auth" class="form-control" required>
                 <option value="" disabled selected>请选择区域权限</option>
               </select>
+            </div>
+            <div class="form-group">
+              <label for="team">班组</label>
+              <input type="text" id="team" class="form-control" placeholder="请输入班组">
             </div>
             <div class="form-group">
               <label for="exam_project">考试项目</label>
@@ -1218,6 +1224,9 @@
             const welderCertificateUrls = certificatePhotos.welderCertificate.map(toHistoryPhotoUrl);
             const specialOperationCertificateUrls = certificatePhotos.specialOperationCertificate.map(toHistoryPhotoUrl);
             const idCardUrls = row.id_card ? [`/uploads/idcards/${encodeURIComponent(row.id_card)}.png?token=${encodeURIComponent(getSessionItem('token') || '')}`] : [];
+            const recordLocked = row.latest_welding_exam_result === 'qualified' && ['qualified', 'not_required'].includes(row.latest_welding_ndt_status);
+            const examResultText = row.latest_welding_exam_result === 'qualified' ? (row.latest_welding_ndt_status === 'pending' ? '合格·待探伤' : '合格') : (row.latest_welding_exam_result === 'unqualified' ? (Number(row.welding_exam_count) >= 2 ? '不合格' : '待补考') : '未考试');
+            const ndtResultText = row.latest_welding_exam_result !== 'qualified' ? '--' : (row.latest_welding_ndt_status === 'qualified' ? '探伤合格' : (row.latest_welding_ndt_status === 'pending' ? '待探伤' : '无需探伤'));
             let examAction;
             if (row.latest_welding_exam_result === 'qualified' && row.latest_welding_ndt_status === 'pending') {
               examAction = `<button type="button" class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px;" onclick="startNdt(${row.id})">待探伤</button>`;
@@ -1246,10 +1255,13 @@
                   <div class="history-info-item"><span class="history-info-label">培训单位</span><span class="history-info-value" title="${escapeHtml(row.company || '')}">${escapeHtml(row.company || '--')}</span></div>
                   <div class="history-info-item"><span class="history-info-label">岗位</span><span class="history-info-value" title="${escapeHtml(row.job)}">${escapeHtml(row.job)}</span></div>
                   <div class="history-info-item"><span class="history-info-label">区域权限</span><span class="history-info-value" title="${escapeHtml(row.region_auth)}">${escapeHtml(row.region_auth)}</span></div>
+                  <div class="history-info-item"><span class="history-info-label">班组</span><span class="history-info-value">${escapeHtml(row.team || '--')}</span></div>
                   <div class="history-info-item"><span class="history-info-label">考试项目</span><span class="history-info-value" title="${escapeHtml(row.exam_project || '--')}">${escapeHtml(row.exam_project || '--')}</span></div>
                   <div class="history-info-item"><span class="history-info-label">证件作业项</span><span class="history-info-value" title="${escapeHtml(row.certificate_work_item || '--')}">${escapeHtml(row.certificate_work_item || '--')}</span></div>
                   <div class="history-info-item"><span class="history-info-label">证件有效期</span><span class="history-info-value">${escapeHtml(row.certificate_expiry || '--')}</span></div>
                   <div class="history-info-item"><span class="history-info-label">焊工代号</span><span class="history-info-value" title="${escapeHtml(row.welder_code || '--')}">${escapeHtml(row.welder_code || '--')}</span></div>
+                  <div class="history-info-item"><span class="history-info-label">考试结果</span><span class="history-info-value">${escapeHtml(examResultText)}</span></div>
+                  <div class="history-info-item"><span class="history-info-label">探伤结果</span><span class="history-info-value">${escapeHtml(ndtResultText)}</span></div>
                   <div class="history-info-item history-info-address"><span class="history-info-label">地址</span><span class="history-info-value" title="${escapeHtml(row.address)}">${escapeHtml(row.address)}</span></div>
                 </div>
               </td>
@@ -1257,13 +1269,14 @@
                 <div style="font-size:0.85rem;color:var(--text-main);">${timeStr}</div>
               </td>
               <td style="text-align: center; vertical-align: middle;">
-                <div class="history-record-actions" style="display: flex; gap: 8px; justify-content: center; align-items: center;">
-                  <button class="btn btn-success history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px;" onclick="editRecord(${row.id})">修改</button>
+                <div class="history-record-actions" style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
+                  ${recordLocked ? `<button class="btn btn-secondary history-card-action-button" style="padding:5px 12px;font-size:.8rem;margin:0;width:auto;min-width:60px;opacity:.65;" disabled>已锁定</button>` : `<button class="btn btn-success history-card-action-button" style="padding:5px 12px;font-size:.8rem;margin:0;width:auto;min-width:60px;" onclick="editRecord(${row.id})">修改</button>`}
                   ${row.word_path ?
                     `<button class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; box-sizing: border-box;" onclick="downloadWord(${row.id})">登记卡下载</button>` :
                     `<button class="btn btn-secondary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; opacity: 0.5; margin: 0; width: auto; min-width: 60px;" disabled title="已失效或未生成">登记卡下载</button>`
                   }
                   ${examAction}
+                  ${recordLocked ? (row.exit_date ? `<span class="history-exit-control"><span style="color:var(--text-muted);font-size:.76rem;">退场</span><strong style="font-size:.78rem;">${escapeHtml(row.exit_date)}</strong></span>` : `<span class="history-exit-control"><input id="exit-date-${row.id}" class="form-control history-exit-date" type="date"><button class="btn btn-danger history-card-action-button" style="padding:5px 9px;font-size:.76rem;margin:0;width:auto;min-width:48px;" onclick="setRecordExit(${row.id})">退场</button></span>`) : ''}
                 </div>
               </td>
             `;
@@ -1367,6 +1380,22 @@
     }
 
     // 点击“修改”进入编辑模式
+    async function setRecordExit(id) {
+      const field = document.getElementById(`exit-date-${id}`);
+      if (!field || !field.value) { showAlert('error', '请先选择退场日期'); return; }
+      const formData = new FormData();
+      formData.append('record_id', id);
+      formData.append('exit_date', field.value);
+      try {
+        const response = await fetch('/api/record/exit', { method: 'POST', headers: { 'Authorization': getSessionItem('token') || '' }, body: formData });
+        const result = await response.json();
+        if (handleAuthFail(response, result)) return;
+        if (!response.ok) { showAlert('error', result.detail || '退场确认失败'); return; }
+        showAlert('success', '退场日期已确认');
+        await loadHistory();
+      } catch (err) { showAlert('error', '网络错误，退场确认失败'); }
+    }
+
     function editRecord(id) {
       const record = historyData.find(r => r.id === id);
       if (!record) return;
@@ -1395,6 +1424,7 @@
       document.getElementById('certificate_work_item').value = record.certificate_work_item || '';
       document.getElementById('certificate_expiry').value = record.certificate_expiry || '';
       document.getElementById('welder_code').value = record.welder_code || '';
+      document.getElementById('team').value = record.team || '';
       // 动态处理 job 选项以支持历史脏数据的兼容回填
       const jobSelect = document.getElementById('job');
       const jobVal = record.job;
@@ -1699,6 +1729,7 @@
       formData.append('certificate_work_item', document.getElementById('certificate_work_item').value);
       formData.append('certificate_expiry', document.getElementById('certificate_expiry').value);
       formData.append('welder_code', document.getElementById('welder_code').value);
+      formData.append('team', document.getElementById('team').value);
       formData.append('id_card_img_path', document.getElementById('id_card_img_path').value);
       
       if (compressedPhotoBlob) {

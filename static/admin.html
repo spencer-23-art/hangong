@@ -577,12 +577,12 @@
     .admin-history-photo-button { min-width:0; aspect-ratio:3/4; padding:0; overflow:hidden; border:0; border-radius:5px; background:rgba(0,0,0,.22); cursor:pointer; }
     .admin-history-photo-button img { width:100%; height:100%; object-fit:cover; display:block; }
     .admin-history-photo-empty { display:flex; align-items:center; justify-content:center; min-height:72px; color:var(--text-muted); font-size:.72rem; text-align:center; }
-    .admin-history-details-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px 12px; min-width:410px; }
-    .admin-history-info-item { display:flex; align-items:center; min-width:0; gap:4px; line-height:1.25; font-size:.8rem; }
+    .admin-history-details-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px 9px; min-width:480px; }
+    .admin-history-info-item { display:flex; align-items:center; min-width:0; gap:3px; line-height:1.2; font-size:.76rem; }
     .admin-history-info-label { flex:0 0 auto; color:var(--text-muted); }
     .admin-history-info-value { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-main); }
-    .admin-history-info-name { font-weight:700; font-size:.9rem; }
-    .admin-history-info-id { grid-column:span 2; font-family:monospace; }
+    .admin-history-info-name { font-weight:700; font-size:.84rem; }
+    .admin-history-info-id { font-family:monospace; }
     .admin-history-info-address { grid-column:1 / -1; align-items:flex-start; }
     .admin-history-info-address .admin-history-info-value { white-space:normal; word-break:break-all; }
     @media (max-width: 768px) {
@@ -612,10 +612,11 @@
     #detail-record-form .form-grid > .form-group:has(#detail-address) { order: 4; }
     #detail-record-form .form-grid > .form-group:has(#detail-job) { order: 5; }
     #detail-record-form .form-grid > .form-group:has(#detail-region) { order: 6; }
-    #detail-record-form .form-grid > .form-group:has(#detail-exam-project) { order: 7; }
-    #detail-record-form .form-grid > .form-group:has(#detail-certificate-work-item) { order: 8; }
-    #detail-record-form .form-grid > .form-group:has(#detail-certificate-expiry) { order: 9; }
-    #detail-record-form .form-grid > .form-group:has(#detail-welder-code) { order: 10; }
+    #detail-record-form .form-grid > .form-group:has(#detail-team) { order: 7; }
+    #detail-record-form .form-grid > .form-group:has(#detail-exam-project) { order: 8; }
+    #detail-record-form .form-grid > .form-group:has(#detail-certificate-work-item) { order: 9; }
+    #detail-record-form .form-grid > .form-group:has(#detail-certificate-expiry) { order: 10; }
+    #detail-record-form .form-grid > .form-group:has(#detail-welder-code) { order: 11; }
     .detail-photo-row { flex-wrap: wrap; }
     .detail-site-photo-preview { width: 120px; min-height: 160px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px dashed var(--glass-border); border-radius: 8px; background: rgba(255,255,255,.02); }
     .detail-site-photo-preview:has(> :only-child) { grid-template-columns: 1fr; }
@@ -1298,6 +1299,10 @@
           <div class="form-group">
             <label for="detail-exam-project" style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 4px;">考试项目</label>
             <input type="text" id="detail-exam-project" class="form-control" placeholder="请输入考试项目">
+          </div>
+          <div class="form-group">
+            <label for="detail-team" style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 4px;">班组</label>
+            <input type="text" id="detail-team" class="form-control" placeholder="请输入班组">
           </div>
           <div class="form-group">
             <label for="detail-certificate-work-item" style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 4px;">证件作业项</label>
@@ -2296,6 +2301,8 @@
         const welderCertificateUrls = sitePhotos.welderCertificate.map(adminPhotoUrl);
         const specialOperationCertificateUrls = sitePhotos.specialOperationCertificate.map(adminPhotoUrl);
         const idCardUrls = r.id_card ? [`/uploads/idcards/${encodeURIComponent(r.id_card)}.png?token=${encodeURIComponent(token)}`] : [];
+        const examResultText = r.latest_welding_exam_result === 'qualified' ? (r.latest_welding_ndt_status === 'pending' ? '合格·待探伤' : '合格') : (r.latest_welding_exam_result === 'unqualified' ? (Number(r.welding_exam_count) >= 2 ? '不合格' : '待补考') : '未考试');
+        const ndtResultText = r.latest_welding_exam_result !== 'qualified' ? '--' : (r.latest_welding_ndt_status === 'qualified' ? '探伤合格' : (r.latest_welding_ndt_status === 'pending' ? '待探伤' : '无需探伤'));
         let weldingExamAction = '';
         if (r.latest_welding_exam_result === 'qualified' && r.latest_welding_ndt_status === 'pending') {
           weldingExamAction = '<button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>待探伤</button>';
@@ -2326,10 +2333,13 @@
               <div class="admin-history-info-item"><span class="admin-history-info-label">培训单位</span><span class="admin-history-info-value" title="${escapeHtml(r.company || '')}">${escapeHtml(r.company || '--')}</span></div>
               <div class="admin-history-info-item"><span class="admin-history-info-label">岗位</span><span class="admin-history-info-value" title="${escapeHtml(r.job)}">${escapeHtml(r.job)}</span></div>
               <div class="admin-history-info-item"><span class="admin-history-info-label">区域权限</span><span class="admin-history-info-value" title="${escapeHtml(r.region_auth)}">${escapeHtml(r.region_auth)}</span></div>
+              <div class="admin-history-info-item"><span class="admin-history-info-label">班组</span><span class="admin-history-info-value">${escapeHtml(r.team || '--')}</span></div>
               <div class="admin-history-info-item"><span class="admin-history-info-label">考试项目</span><span class="admin-history-info-value" title="${escapeHtml(r.exam_project || '--')}">${escapeHtml(r.exam_project || '--')}</span></div>
               <div class="admin-history-info-item"><span class="admin-history-info-label">证件作业项</span><span class="admin-history-info-value" title="${escapeHtml(r.certificate_work_item || '--')}">${escapeHtml(r.certificate_work_item || '--')}</span></div>
               <div class="admin-history-info-item"><span class="admin-history-info-label">证件有效期</span><span class="admin-history-info-value">${escapeHtml(r.certificate_expiry || '--')}</span></div>
               <div class="admin-history-info-item"><span class="admin-history-info-label">焊工代号</span><span class="admin-history-info-value" title="${escapeHtml(r.welder_code || '--')}">${escapeHtml(r.welder_code || '--')}</span></div>
+              <div class="admin-history-info-item"><span class="admin-history-info-label">考试结果</span><span class="admin-history-info-value">${escapeHtml(examResultText)}</span></div>
+              <div class="admin-history-info-item"><span class="admin-history-info-label">探伤结果</span><span class="admin-history-info-value">${escapeHtml(ndtResultText)}</span></div>
               <div class="admin-history-info-item admin-history-info-address"><span class="admin-history-info-label">地址</span><span class="admin-history-info-value" title="${escapeHtml(r.address)}">${escapeHtml(r.address)}</span></div>
             </div>
           </td>
@@ -2790,6 +2800,7 @@
       document.getElementById('detail-certificate-work-item').value = record.certificate_work_item || '';
       document.getElementById('detail-certificate-expiry').value = record.certificate_expiry || '';
       document.getElementById('detail-welder-code').value = record.welder_code || '';
+      document.getElementById('detail-team').value = record.team || '';
 
       // 填充民族
       const nationSelect = document.getElementById('detail-nation');
@@ -2996,6 +3007,7 @@
       const certificateWorkItem = document.getElementById('detail-certificate-work-item').value.trim();
       const certificateExpiry = document.getElementById('detail-certificate-expiry').value;
       const welderCode = document.getElementById('detail-welder-code').value.trim();
+      const team = document.getElementById('detail-team').value.trim();
       const remark = document.getElementById('detail-remark').value.trim();
       const idCardImgPath = document.getElementById('detail-id-card-img-path').value;
       
@@ -3023,6 +3035,7 @@
       formData.append('certificate_work_item', certificateWorkItem);
       formData.append('certificate_expiry', certificateExpiry);
       formData.append('welder_code', welderCode);
+      formData.append('team', team);
       formData.append('remark', remark);
       formData.append('id_card_img_path', idCardImgPath || '');
       
