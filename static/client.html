@@ -919,6 +919,18 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
+    // 考试/探伤页面返回时带 tab=history，始终重新请求接口而不是复用浏览器返回缓存。
+    function refreshHistoryAfterWorkflow() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'history') {
+        switchTab('history');
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (activeTab === 'history') {
+        loadHistory();
+      }
+    }
+    window.addEventListener('pageshow', refreshHistoryAfterWorkflow);
+
     let selectedRestoreRecordsMap = new Map();
     let lastFilteredRestoreRecords = [];
     let restoreSearchTimeout = null;

@@ -161,7 +161,11 @@
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.detail || '考试保存失败，请重试');
         setNotice(result === 'qualified' ? (requiresNdt ? '考试合格，等待探伤。' : '考试合格，考试已结束。') : '不合格原因已记录，考试已结束。', 'success');
-        setTimeout(() => location.replace('/client'), 900);
+        // 管理员从管理端进入考试，返回管理端；并携带时间戳避免历史列表使用旧页面缓存。
+        const target = role === 'admin'
+          ? `/admin?refresh=${Date.now()}`
+          : `/client?tab=history&refresh=${Date.now()}`;
+        setTimeout(() => location.replace(target), 900);
       } catch (error) { setNotice(error.message || '考试保存失败，请重试。', 'error'); }
       finally { document.getElementById('saving').classList.remove('visible'); }
     }

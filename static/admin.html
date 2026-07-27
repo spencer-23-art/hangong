@@ -617,6 +617,13 @@
     #detail-record-form .form-grid > .form-group:has(#detail-certificate-work-item) { order: 9; }
     #detail-record-form .form-grid > .form-group:has(#detail-certificate-expiry) { order: 10; }
     #detail-record-form .form-grid > .form-group:has(#detail-welder-code) { order: 11; }
+    .detail-status-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin:0 0 12px; }
+    .detail-status-item { min-width:0; padding:7px 8px; border:1px solid var(--glass-border); border-radius:8px; background:rgba(255,255,255,.035); }
+    .detail-status-item span { display:block; color:var(--text-muted); font-size:.68rem; line-height:1.15; }
+    .detail-status-item strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px; font-size:.79rem; line-height:1.2; }
+    .detail-status-item.success strong { color:#34d399; }
+    .detail-status-item.warning strong { color:#fbbf24; }
+    .detail-status-item.danger strong { color:#f87171; }
     .detail-photo-row { flex-wrap: wrap; }
     .detail-site-photo-preview { width: 120px; min-height: 160px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px dashed var(--glass-border); border-radius: 8px; background: rgba(255,255,255,.02); }
     .detail-site-photo-preview:has(> :only-child) { grid-template-columns: 1fr; }
@@ -624,6 +631,7 @@
     .detail-site-photo-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .detail-site-photo-empty { display: flex; align-items: center; justify-content: center; grid-column: 1 / -1; min-height: 148px; color: var(--text-muted); font-size: .75rem; text-align: center; }
     @media (max-width: 600px) {
+      .detail-status-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
       .detail-photo-row { gap: 10px !important; }
       .detail-site-photo-preview { width: 100px; min-height: 132px; }
       .detail-site-photo-empty { min-height: 120px; }
@@ -1206,6 +1214,7 @@
   <div id="record-detail-modal" class="modal" onclick="closeRecordDetailModal()">
     <div class="glass-container" style="max-width: 760px; margin-top: 0; padding: 25px; position: relative; max-height: 85vh; overflow-y: auto;" onclick="event.stopPropagation()">
       <h3 style="margin-bottom: 15px; text-align: left; background: linear-gradient(to right, #ffffff, #c7d2fe); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">人员培训数据详情</h3>
+      <div id="detail-status-grid" class="detail-status-grid"></div>
       
       <form id="detail-record-form" onsubmit="submitRecordDetail(event)">
         <input type="hidden" id="detail-record-id">
@@ -2784,9 +2793,33 @@
       reader.readAsDataURL(file);
     }
 
+    function renderRecordDetailStatus(record) {
+      const examResult = record.latest_welding_exam_result;
+      const ndtStatus = record.latest_welding_ndt_status;
+      const examText = examResult === 'qualified' ? '考试合格' : (examResult === 'unqualified' ? (Number(record.welding_exam_count) >= 2 ? '考试不合格' : '待补考') : '未考试');
+      const ndtText = examResult !== 'qualified' ? '--' : (ndtStatus === 'qualified' ? '探伤合格' : (ndtStatus === 'pending' ? '待探伤' : '无需探伤'));
+      const finalText = examResult === 'qualified' && ['qualified', 'not_required'].includes(ndtStatus) ? '最终合格' : (examResult === 'qualified' ? '待探伤' : (examResult === 'unqualified' ? (Number(record.welding_exam_count) >= 2 ? '最终不合格' : '待补考') : '待考试'));
+      const entryComplete = record.name && record.id_card && record.phone && record.address && record.job && record.region_auth && record.photo_path;
+      const typeFor = (value) => value.includes('合格') && !value.includes('不合格') ? 'success' : (value.includes('待') || value === '--' ? 'warning' : (value.includes('不合格') ? 'danger' : ''));
+      const cells = [
+        ['录入状态', entryComplete ? '资料完整' : '资料待补'],
+        ['考试结果', examText],
+        ['探伤结果', ndtText],
+        ['最终状态', finalText],
+        ['考试次数', `${Number(record.welding_exam_count || 0)} 次`],
+        ['录入人员', record.recorder_name || '--'],
+        ['录入时间', (record.created_at || '--').replace('T', ' ').slice(0, 16)],
+        ['退场日期', record.exit_date || '--']
+      ];
+      const grid = document.getElementById('detail-status-grid');
+      if (grid) grid.innerHTML = cells.map(([label, value]) => `<div class="detail-status-item ${typeFor(String(value))}"><span>${escapeHtml(label)}</span><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong></div>`).join('');
+    }
+
     function openRecordDetail(id) {
       const record = lastFilteredRecords.find(r => r.id === id);
       if (!record) return;
+
+      renderRecordDetailStatus(record);
 
       document.getElementById('detail-record-id').value = record.id;
       document.getElementById('detail-id-card-img-path').value = ''; 
