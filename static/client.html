@@ -138,6 +138,7 @@
     .history-info-address .history-info-value { white-space: normal; word-break: break-all; }
     .history-exit-control { display:flex; align-items:center; justify-content:center; gap:4px; flex-wrap:wrap; }
     .history-exit-date { width:118px; height:29px; padding:3px 5px; font-size:.74rem; }
+    .form-control.field-missing { border-color:#f87171 !important; box-shadow:0 0 0 2px rgba(248,113,113,.18); }
     @media (max-width: 640px) {
       .photo-uploader-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
       .photo-uploader-row .photo-uploader { width: 100% !important; height: clamp(128px, 42vw, 200px) !important; margin: 0 !important; }
@@ -417,7 +418,7 @@
       <div class="alert alert-error" id="error-alert"></div>
       <div class="alert alert-success" id="success-alert"></div>
 
-      <form id="form-record" onsubmit="handleSubmit(event)">
+      <form id="form-record" onsubmit="handleSubmit(event)" novalidate>
         <!-- 新增：身份证识别录入 -->
         <div class="form-group">
           <div class="form-grid" style="grid-template-columns: 1fr; gap: 10px; margin-bottom: 15px; max-width: 100%;">
@@ -507,24 +508,24 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="team">班组</label>
-              <input type="text" id="team" class="form-control" placeholder="请输入班组">
+              <label for="team">班组 *</label>
+              <input type="text" id="team" class="form-control" placeholder="请输入班组" required>
             </div>
             <div class="form-group">
-              <label for="exam_project">考试项目</label>
-              <input type="text" id="exam_project" class="form-control" placeholder="请输入考试项目">
+              <label for="exam_project">考试项目 *</label>
+              <input type="text" id="exam_project" class="form-control" placeholder="请输入考试项目" required>
             </div>
             <div class="form-group">
-              <label for="certificate_work_item">证件作业项</label>
-              <input type="text" id="certificate_work_item" class="form-control" placeholder="请输入证件作业项">
+              <label for="certificate_work_item">证件作业项 *</label>
+              <input type="text" id="certificate_work_item" class="form-control" placeholder="请输入证件作业项" required>
             </div>
             <div class="form-group">
-              <label for="certificate_expiry">证件有效期</label>
-              <input type="date" id="certificate_expiry" class="form-control">
+              <label for="certificate_expiry">证件有效期 *</label>
+              <input type="date" id="certificate_expiry" class="form-control" required>
             </div>
             <div class="form-group">
-              <label for="welder_code">焊工代号</label>
-              <input type="text" id="welder_code" class="form-control" placeholder="请输入焊工代号">
+              <label for="welder_code">焊工代号 *</label>
+              <input type="text" id="welder_code" class="form-control" placeholder="请输入焊工代号" required>
             </div>
           </div>
         </div>
@@ -1716,8 +1717,30 @@
       }
     }
 
+    function validateRecordForm() {
+      const fields = [
+        ['name', '姓名'], ['id_card', '身份证号'], ['phone', '联系电话'], ['address', '常住地址'],
+        ['job', '岗位/工种'], ['region_auth', '区域权限'], ['team', '班组'], ['exam_project', '考试项目'],
+        ['certificate_work_item', '证件作业项'], ['certificate_expiry', '证件有效期'], ['welder_code', '焊工代号']
+      ].map(([id, label]) => ({ id, label, element: document.getElementById(id) }));
+      const missing = fields.filter(({ element }) => !element || !String(element.value || '').trim());
+      fields.forEach(({ element }) => { if (element) element.classList.remove('field-missing'); });
+      if (!missing.length) return true;
+
+      missing.forEach(({ element }) => { if (element) element.classList.add('field-missing'); });
+      showAlert('error', `请填写以下必填项：${missing.map(({ label }) => label).join('、')}`);
+      const first = missing[0] && missing[0].element;
+      if (first) {
+        first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (!first.disabled) first.focus({ preventScroll: true });
+      }
+      return false;
+    }
+
     async function handleSubmit(e) {
       e.preventDefault();
+
+      if (!validateRecordForm()) return;
       
       if (currentEditRecordId === null && !compressedPhotoBlob) {
         showAlert('error', '请先上传您的照片！');
