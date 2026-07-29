@@ -300,7 +300,17 @@ def generate_qualification_certificate(record, exam, issuer_name):
         subprocess.run(['pdftoppm', '-f', '1', '-l', '1', '-r', '150', '-jpeg', '-singlefile', pdf_path, image_base], check=True, timeout=60)
         rendered_jpg = f'{image_base}.jpg'
         with Image.open(rendered_jpg) as image:
-            image.convert('RGB').resize((506, 319), Image.Resampling.LANCZOS).save(output_path, 'JPEG', quality=95, dpi=(150, 150))
+            rendered = image.convert('RGB')
+            # The template contains a card-sized table on a Word page. Trim only its blank page margin;
+            # the table itself, including all fonts, borders and inserted fields, remains unchanged.
+            non_white = Image.new('L', rendered.size)
+            non_white.putdata([255 if min(pixel) < 245 else 0 for pixel in rendered.getdata()])
+            bounds = non_white.getbbox()
+            if bounds:
+                padding = 6
+                left, top, right, bottom = bounds
+                rendered = rendered.crop((max(0, left - padding), max(0, top - padding), min(rendered.width, right + padding), min(rendered.height, bottom + padding)))
+            rendered.resize((506, 319), Image.Resampling.LANCZOS).save(output_path, 'JPEG', quality=95, dpi=(150, 150))
         return output_path
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
