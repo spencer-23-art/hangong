@@ -655,10 +655,6 @@
         <svg style="width:16px;height:16px;margin-right:8px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         注册用户管理
       </div>
-      <div class="sidebar-menu-item" id="side-nav-restore" onclick="handleSidebarTab('restore')">
-        <svg style="width:16px;height:16px;margin-right:8px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-        门禁恢复管理
-      </div>
       <div class="sidebar-menu-item" id="side-nav-exam" onclick="handleSidebarTab('exam')">
         <svg style="width:16px;height:16px;margin-right:8px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         在线答题
@@ -719,10 +715,6 @@
           <svg style="width:16px;height:16px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           下载信息卡
         </button>
-        <button class="btn btn-success" id="btn-export-restore" onclick="exportRestoreData()" style="margin-left: 8px; display: none; background: #818cf8; border-color: #818cf8;">
-          <svg style="width:16px;height:16px;margin-right:6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><polyline points="9 11 12 14 22 4"></polyline><polyline points="21 12 21 21 3 21 3 3 12 3"></polyline></svg>
-          下载门禁恢复 (CSV+照片)
-        </button>
       </div>
     </div>
 
@@ -730,7 +722,6 @@
     <div class="admin-nav">
       <div class="admin-nav-item active" id="nav-records" onclick="switchAdminTab('records')">已录入培训数据</div>
       <div class="admin-nav-item" id="nav-pending" onclick="switchAdminTab('pending')">注册用户管理</div>
-      <div class="admin-nav-item" id="nav-restore" onclick="switchAdminTab('restore')">门禁恢复管理</div>
       <div class="admin-nav-item" id="nav-exam" onclick="switchAdminTab('exam')">在线答题</div>
       <div class="admin-nav-item" id="nav-config" onclick="switchAdminTab('config')">系统配置</div>
     </div>
@@ -860,28 +851,6 @@
         <div id="pending-pagination" class="pagination-bar" style="display: none; margin-top: 15px;"></div>
       </div>
     </div>
-    <!-- TAB 3: 门禁恢复管理 -->
-    <div class="tab-content" id="admin-content-restore">
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 40px; text-align: center;"><input type="checkbox" id="restore-check-all" onchange="toggleRestoreSelectAll(this)" style="width: 18px; height: 18px; cursor: pointer;"></th>
-              <th style="width: 60px; text-align: center;">照片</th>
-              <th>人员基本信息</th>
-              <th>工作单位与岗位权限 / 地址</th>
-              <th>申请时间与人员</th>
-              <th style="width: 80px; text-align: center;">操作</th>
-            </tr>
-          </thead>
-          <tbody id="restore-tbody">
-            <!-- 动态生成恢复数据 -->
-          </tbody>
-        </table>
-        <div id="restore-no-data" class="no-data" style="display: none;">暂无门禁恢复申请数据</div>
-      </div>
-    </div>
-
     <!-- TAB 4: 在线答题 -->
     <div class="tab-content" id="admin-content-exam">
       <div class="mobile-toolbar" id="mobile-exam-toolbar" aria-label="考试记录操作">
@@ -1803,36 +1772,21 @@
       if (sideNavItem) sideNavItem.classList.add('active');
 
       var btnExcel = document.getElementById('btn-export-excel');
-      var btnGate = document.getElementById('btn-export-gate');
-      var btnRestore = document.getElementById('btn-export-restore');
 
       if (tab === 'records') {
         document.getElementById('nav-records').classList.add('active');
         document.getElementById('admin-content-records').classList.add('active');
         if (btnExcel) btnExcel.style.display = 'inline-flex';
-        if (btnGate) btnGate.style.display = 'inline-flex';
-        if (btnRestore) btnRestore.style.display = 'none';
         loadRecords();
       } else if (tab === 'pending') {
         document.getElementById('nav-pending').classList.add('active');
         document.getElementById('admin-content-pending').classList.add('active');
         if (btnExcel) btnExcel.style.display = 'none';
-        if (btnGate) btnGate.style.display = 'none';
-        if (btnRestore) btnRestore.style.display = 'none';
         loadPendingUsers();
-      } else if (tab === 'restore') {
-        document.getElementById('nav-restore').classList.add('active');
-        document.getElementById('admin-content-restore').classList.add('active');
-        if (btnExcel) btnExcel.style.display = 'none';
-        if (btnGate) btnGate.style.display = 'none';
-        if (btnRestore) btnRestore.style.display = 'inline-flex';
-        loadRestoreRecords();
       } else if (tab === 'exam') {
         document.getElementById('nav-exam').classList.add('active');
         document.getElementById('admin-content-exam').classList.add('active');
         if (btnExcel) btnExcel.style.display = 'none';
-        if (btnGate) btnGate.style.display = 'none';
-        if (btnRestore) btnRestore.style.display = 'none';
         loadExamRecords();
         loadExamCompanyOptions();
         loadExamApprovals();
@@ -1840,251 +1794,8 @@
         document.getElementById('nav-config').classList.add('active');
         document.getElementById('admin-content-config').classList.add('active');
         if (btnExcel) btnExcel.style.display = 'none';
-        if (btnGate) btnGate.style.display = 'none';
-        if (btnRestore) btnRestore.style.display = 'none';
         loadSystemConfig();
       }
-    }
-
-    var selectedRestoreRecordsMap = new Map();
-    var deselectedRestoreRecordIds = new Set();
-    var lastFilteredRestoreRecords = [];
-
-    async function loadRestoreRecords() {
-      var debugDiv = document.getElementById('restore-no-data');
-      if (debugDiv) { debugDiv.style.display = 'block'; debugDiv.innerText = '正在加载门禁恢复数据...'; }
-      try {
-        var response = await fetch('/api/admin/restore_records', {
-          headers: { 'Authorization': token }
-        });
-        var result = await response.json();
-        console.log('[RESTORE] API response code:', result.code, 'data count:', (result.data || []).length);
-        if (debugDiv) { debugDiv.innerText = 'API返回: code=' + result.code + ', 数据条数=' + (result.data || []).length; }
-        if (response.ok && result.code === 200) {
-          lastFilteredRestoreRecords = result.data || [];
-          lastFilteredRestoreRecords.forEach(function(r) {
-            if (!selectedRestoreRecordsMap.has(r.id) && !deselectedRestoreRecordIds.has(r.id)) {
-              if (r.is_restore_downloaded === 0) {
-                selectedRestoreRecordsMap.set(r.id, r);
-              }
-            }
-          });
-          renderRestoreRecords();
-        } else {
-          console.error('[RESTORE] API error:', result);
-          if (debugDiv) { debugDiv.style.display = 'block'; debugDiv.innerText = 'API错误: ' + JSON.stringify(result); }
-          showAlert('error', result.detail || '加载门禁恢复记录失败');
-        }
-      } catch (err) {
-        console.error('[RESTORE] loadRestoreRecords exception:', err);
-        if (debugDiv) { debugDiv.style.display = 'block'; debugDiv.innerText = '加载异常: ' + err.message; }
-        showAlert('error', '获取门禁恢复记录出现网络错误');
-      }
-      checkRestoreRecordsNotification();
-    }
-
-    function renderRestoreRecords() {
-      console.log('[RESTORE] renderRestoreRecords called');
-      var tbody = document.getElementById('restore-tbody');
-      var noData = document.getElementById('restore-no-data');
-      if (!tbody) { console.error('[RESTORE] tbody not found'); return; }
-      try {
-        tbody.innerHTML = '';
-        var mergedMap = new Map();
-        selectedRestoreRecordsMap.forEach(function(val, key) { mergedMap.set(key, val); });
-        lastFilteredRestoreRecords.forEach(function(r) { mergedMap.set(r.id, r); });
-        var finalRecords = Array.from(mergedMap.values());
-        console.log('[RESTORE] finalRecords count:', finalRecords.length);
-        finalRecords.sort(function(a, b) {
-          if ((a.is_restore_downloaded || 0) !== (b.is_restore_downloaded || 0)) {
-            return (a.is_restore_downloaded || 0) - (b.is_restore_downloaded || 0);
-          }
-          var tA = 0, tB = 0;
-          try { tA = a.created_at ? new Date(a.created_at.replace(' ', 'T')).getTime() : 0; } catch(e) {}
-          try { tB = b.created_at ? new Date(b.created_at.replace(' ', 'T')).getTime() : 0; } catch(e) {}
-          return tB - tA;
-        });
-        if (finalRecords.length === 0) {
-          noData.style.display = 'block';
-          document.getElementById('restore-check-all').checked = false;
-          return;
-        }
-        noData.style.display = 'none';
-        for (var i = 0; i < finalRecords.length; i++) {
-          var r = finalRecords[i];
-          try {
-            var tr = document.createElement('tr');
-            if (r.is_restore_downloaded === 1) tr.classList.add('downloaded-row');
-            var isChecked = selectedRestoreRecordsMap.has(r.id);
-            var checkedAttr = isChecked ? 'checked' : '';
-            var sp = r.photo_path ? String(r.photo_path).replace(/\\/g, '/') : '';
-            
-            var h = '';
-            h += '<td style="text-align:center;"><input type="checkbox" class="restore-record-checkbox" value="' + r.id + '" ' + checkedAttr + ' onchange="handleSingleRestoreCheckboxChange(this,' + r.id + ')" onclick="event.stopPropagation()" style="width:18px;height:18px;cursor:pointer;"></td>';
-            h += '<td style="text-align:center;"><img src="/' + sp + '" class="table-img" onclick="zoomImage(this.src)"></td>';
-            h += '<td>';
-            h += '  <div style="display:flex;align-items:center;gap:6px;">';
-            h += '    <strong style="font-weight:700;font-size:0.95rem;color:var(--text-main);">' + escapeHtml(r.name) + '</strong>';
-            h += '    <span class="badge" style="padding:1px 6px;font-size:0.75rem;background:rgba(99,102,241,0.1);color:#818cf8;">' + escapeHtml(r.education) + '</span>';
-            h += '  </div>';
-            var isRed = (r.gender === '女') ? (r.age >= 55) : (r.age >= 60);
-            var ageStyle = isRed ? 'style="color:#ff0000;font-weight:bold;"' : '';
-            h += '  <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">' + escapeHtml(r.gender) + ' &middot; <span ' + ageStyle + '>' + (r.age || 0) + '岁</span> &middot; ' + escapeHtml(r.nation) + '</div>';
-            h += '  <div style="font-family:monospace;font-size:0.85rem;color:var(--text-main);font-weight:600;margin-top:4px;">身份证: ' + escapeHtml(r.id_card) + '</div>';
-            h += '  <div style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;">手机: ' + escapeHtml(r.phone) + '</div>';
-            h += '</td>';
-            h += '<td>';
-            h += '  <div style="font-weight:600;color:var(--text-main);font-size:0.9rem;">' + escapeHtml(r.company || '暂无单位') + '</div>';
-            h += '  <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">岗位: ' + escapeHtml(r.job) + ' | 区域权限: ' + escapeHtml(r.region_auth || '无') + '</div>';
-            h += '  <div style="font-size:0.8rem;color:var(--text-muted);margin-top:6px;white-space:normal;word-break:break-all;max-width:320px;" title="' + escapeHtml(r.address) + '">地址: <span style="color:var(--text-main);">' + escapeHtml(r.address) + '</span></div>';
-            h += '</td>';
-            h += '<td>';
-            h += '  <div style="font-size:0.85rem;color:var(--text-main);">' + formatTime(r.created_at) + '</div>';
-            h += '  <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">提交人: ' + escapeHtml(r.recorder_name || '--') + '</div>';
-            h += '</td>';
-            h += '<td style="text-align:center;">';
-            h += '  <button class="btn" onclick="deleteRestoreGate(' + r.id + ')" style="background:#ef4444;border-color:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;width:auto;height:auto;line-height:1.5;">删除</button>';
-            h += '</td>';
-            tr.innerHTML = h;
-            tbody.appendChild(tr);
-          } catch (rowErr) {
-            console.error('[RESTORE] Row ' + i + ' error:', rowErr);
-          }
-        }
-        updateRestoreCheckAllState();
-      } catch (e) {
-        console.error('[RESTORE] FATAL:', e);
-        tbody.innerHTML = '<tr><td colspan="6" style="color:red;padding:20px;">渲染错误: ' + e.message + '</td></tr>';
-      }
-    }
-
-    // 删除门禁恢复记录
-    async function deleteRestoreGate(id) {
-      if (!confirm("确定要删除这条门禁恢复申请记录吗？")) {
-        return;
-      }
-      try {
-        var formData = new FormData();
-        formData.append('ids', id);
-        var response = await fetch('/api/admin/delete_restore_gate', {
-          method: 'POST',
-          headers: { 'Authorization': token },
-          body: formData
-        });
-        var result = await response.json();
-        if (response.ok && result.code === 200) {
-          showAlert('success', '删除成功');
-          selectedRestoreRecordsMap.delete(id);
-          deselectedRestoreRecordIds.delete(id);
-          loadRestoreRecords();
-        } else {
-          showAlert('error', result.message || result.detail || '删除失败');
-        }
-      } catch (err) {
-        console.error('删除门禁恢复失败', err);
-        showAlert('error', '删除网络请求失败');
-      }
-    }
-
-    // 单个 checkbox 状态改变
-    function handleSingleRestoreCheckboxChange(el, id) {
-      if (el.checked) {
-        let record = lastFilteredRestoreRecords.find(r => r.id === id) || selectedRestoreRecordsMap.get(id);
-        if (record) {
-          selectedRestoreRecordsMap.set(id, record);
-        }
-        deselectedRestoreRecordIds.delete(id);
-      } else {
-        selectedRestoreRecordsMap.delete(id);
-        deselectedRestoreRecordIds.add(id);
-      }
-      renderRestoreRecords();
-    }
-
-    // 表头全选框状态
-    function updateRestoreCheckAllState() {
-      const checkboxes = document.querySelectorAll('.restore-record-checkbox');
-      if (checkboxes.length === 0) {
-        document.getElementById('restore-check-all').checked = false;
-        return;
-      }
-      let allChecked = true;
-      checkboxes.forEach(cb => {
-        if (!cb.checked) {
-          allChecked = false;
-        }
-      });
-      document.getElementById('restore-check-all').checked = allChecked;
-    }
-
-    // 全选/全不选操作
-    function toggleRestoreSelectAll(el) {
-      const checkboxes = document.querySelectorAll('.restore-record-checkbox');
-      checkboxes.forEach(cb => {
-        cb.checked = el.checked;
-        const id = parseInt(cb.value);
-        if (el.checked) {
-          let record = lastFilteredRestoreRecords.find(r => r.id === id) || selectedRestoreRecordsMap.get(id);
-          if (record) {
-            selectedRestoreRecordsMap.set(id, record);
-          }
-          deselectedRestoreRecordIds.delete(id);
-        } else {
-          selectedRestoreRecordsMap.delete(id);
-          deselectedRestoreRecordIds.add(id);
-        }
-      });
-      renderRestoreRecords();
-    }
-
-    // 下载恢复数据一键包
-    function exportRestoreData() {
-      if (selectedRestoreRecordsMap.size === 0) {
-        alert('请先勾选需要恢复门禁的培训人员！');
-        return;
-      }
-      const ids = Array.from(selectedRestoreRecordsMap.keys()).join(',');
-      
-      // 1. 下载 CSV 文件
-      const csvUrl = '/api/admin/export/restore/csv?ids=' + encodeURIComponent(ids);
-      downloadFileWithToken(csvUrl, '恢复人员导入表.csv', false);
-
-      // 2. 下载照片包并联动刷新状态
-      const photosUrl = '/api/admin/export/restore/photos?ids=' + encodeURIComponent(ids);
-      
-      fetch(photosUrl, {
-        headers: { 'Authorization': token }
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('下载失败，无权限或服务端异常');
-        }
-        return response.blob();
-      })
-      .then(blob => {
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = '恢复人员照片.zip';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-
-        // 将选中的记录从选中集与反选集清除，并触发局部刷新
-        const downloadedIds = ids.split(',').map(Number);
-        downloadedIds.forEach(id => {
-          selectedRestoreRecordsMap.delete(id);
-          deselectedRestoreRecordIds.delete(id);
-        });
-
-        showAlert('success', '门禁恢复数据下载成功！已自动分开保存 CSV 导入表和照片包。');
-        setTimeout(() => {
-          loadRestoreRecords();
-        }, 500);
-      })
-      .catch(err => {
-        showAlert('error', err.message);
-      });
     }
 
     // 0. 加载所有已审核通过且未删除的单位列表
@@ -2233,9 +1944,6 @@
           // 首次加载或重新加载时，对于未下载且之前没有选中/反选历史的数据，默认加入选中集
           lastFilteredRecords.forEach(r => {
             if (!selectedRecordsMap.has(r.id) && !deselectedRecordIds.has(r.id)) {
-              if (r.is_gate_downloaded === 0) {
-                selectedRecordsMap.set(r.id, r);
-              }
             }
           });
           
@@ -2284,13 +1992,7 @@
       // 仅使用当前筛选出的最新数据渲染，不受之前跨筛选选中记录的影响，只显示当前筛选条件内的全部人员
       const finalRecords = [...lastFilteredRecords];
       
-      // 重新按“已下载门禁变灰排后，未下载置顶；内部按时间降序”规则排序
-      finalRecords.sort((a, b) => {
-        if (a.is_gate_downloaded !== b.is_gate_downloaded) {
-          return a.is_gate_downloaded - b.is_gate_downloaded; // ASC (0 排在 1 前面)
-        }
-        return new Date(b.created_at.replace(' ', 'T')) - new Date(a.created_at.replace(' ', 'T'));
-      });
+      finalRecords.sort((a, b) => new Date(b.created_at.replace(' ', 'T')) - new Date(a.created_at.replace(' ', 'T')));
       
       if (finalRecords.length === 0) {
         noData.style.display = 'block';
@@ -2301,9 +2003,6 @@
       
       finalRecords.forEach(r => {
         const tr = document.createElement('tr');
-        if (r.is_gate_downloaded === 1) {
-          tr.classList.add('downloaded-row');
-        }
         
         const isChecked = selectedRecordsMap.has(r.id);
         const checkedAttr = isChecked ? 'checked' : '';
@@ -2572,7 +2271,6 @@
       } catch (err) {
         showAlert('error', '获取用户列表时网络错误');
       }
-      checkRestoreRecordsNotification();
     }
 
     // 3. 用户审批逻辑
@@ -2719,20 +2417,6 @@
       } else if (format === 'excel') {
         const url = '/api/admin/export/excel?ids=' + encodeURIComponent(ids);
         downloadFileWithToken(url, '培训人员信息表.xlsx', false);
-      } else if (format === 'csv') {
-        const csvUrl = '/api/admin/export/gate/csv?ids=' + encodeURIComponent(ids);
-        downloadFileWithToken(csvUrl, '培训人员导入表.csv', true);
-      } else if (format === 'photos') {
-        const photosUrl = '/api/admin/export/gate/photos?ids=' + encodeURIComponent(ids);
-        downloadFileWithToken(photosUrl, '培训人员照片.zip', false);
-      } else if (format === 'gate') {
-        // 1. 下载 CSV 文件（此接口会同时更新已下载状态，故传入 shouldRefreshList 为 true）
-        const csvUrl = '/api/admin/export/gate/csv?ids=' + encodeURIComponent(ids);
-        downloadFileWithToken(csvUrl, '培训人员导入表.csv', true);
-
-        // 2. 下载照片包
-        const photosUrl = '/api/admin/export/gate/photos?ids=' + encodeURIComponent(ids);
-        downloadFileWithToken(photosUrl, '培训人员照片.zip', false);
       }
     }
 
@@ -3564,30 +3248,6 @@
       window.location.href = '/login';
     }
 
-    // 检测是否有未下载的新门禁恢复申请，并控制彩色边框
-    async function checkRestoreRecordsNotification() {
-      try {
-        const response = await fetch('/api/admin/restore_records', {
-          headers: { 'Authorization': token }
-        });
-        const result = await response.json();
-        if (response.ok && result.code === 200) {
-          const records = result.data || [];
-          const hasNewRestore = records.some(r => r.is_restore_downloaded === 0);
-          const navRestore = document.getElementById('nav-restore');
-          if (navRestore) {
-            if (hasNewRestore) {
-              navRestore.classList.add('glow-restore-tab');
-            } else {
-              navRestore.classList.remove('glow-restore-tab');
-            }
-          }
-        }
-      } catch (err) {
-        console.error('检测新门禁恢复失败', err);
-      }
-    }
-
     // 首次进入默认加载数据
     async function initPage() {
       await loadCompanies();
@@ -3596,7 +3256,6 @@
       await loadBadgeCount();
     }
     initPage();
-    checkRestoreRecordsNotification();
 
     // 在线答题相关函数
     let examFilterName = '';
@@ -4852,7 +4511,6 @@
   <nav class="app-tabbar" aria-label="管理端主导航">
     <button class="app-tab active" type="button" data-tab="records" aria-selected="true" onclick="switchAdminTab('records'); setMobileTab('records')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10a2 2 0 0 1 2 2v16H5V5a2 2 0 0 1 2-2Z"></path><path d="M9 8h6M9 12h6M9 16h4"></path></svg><span class="app-tab-label">记录</span></button>
     <button class="app-tab" type="button" data-tab="pending" aria-selected="false" onclick="switchAdminTab('pending'); setMobileTab('pending')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><path d="M3 21v-2a6 6 0 0 1 12 0v2"></path><path d="M16 11a3 3 0 1 0 0-6M17 21v-2a6 6 0 0 0-3-5.2"></path></svg><span class="app-tab-label">注册管理</span></button>
-    <button class="app-tab" type="button" data-tab="restore" aria-selected="false" onclick="switchAdminTab('restore'); setMobileTab('restore')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path><path d="M12 7v5l3 2"></path></svg><span class="app-tab-label">门禁</span></button>
     <button class="app-tab" type="button" data-tab="exam" aria-selected="false" onclick="switchAdminTab('exam'); setMobileTab('exam')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 19 8-14 8 14"></path><path d="M6.5 15h11"></path></svg><span class="app-tab-label">考试</span></button>
     <button class="app-tab" type="button" data-tab="config" aria-selected="false" onclick="switchAdminTab('config'); setMobileTab('config')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.1 2.1-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56v.1h-3v-.1A1.7 1.7 0 0 0 10.7 18.6a1.7 1.7 0 0 0-1.88.34l-.06.06-2.1-2.1.06-.06A1.7 1.7 0 0 0 7.06 15 1.7 1.7 0 0 0 5.5 14H5.4v-3h.1A1.7 1.7 0 0 0 7.06 10a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.1-2.1.06.06A1.7 1.7 0 0 0 10.7 6.36a1.7 1.7 0 0 0 1.03-1.56V4.7h3v.1a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.1 2.1-.06.06A1.7 1.7 0 0 0 19.4 10a1.7 1.7 0 0 0 1.56 1h.1v3h-.1A1.7 1.7 0 0 0 19.4 15Z"></path></svg><span class="app-tab-label">设置</span></button>
   </nav>
