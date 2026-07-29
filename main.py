@@ -196,7 +196,7 @@ def _convert_docx_to_pdf(source_docx, output_dir):
         raise RuntimeError('模板转换 PDF 失败')
     return output_pdf
 
-def _fill_template(template_path, output_docx, text_values, image_values):
+def _fill_template(template_path, output_docx, text_values, image_values, trim_trailing_blank_page=False):
     if not os.path.exists(template_path):
         raise FileNotFoundError(f'未找到模板：{os.path.basename(template_path)}')
     document = Document(template_path)
@@ -214,6 +214,15 @@ def _fill_template(template_path, output_docx, text_values, image_values):
     missing = required - found
     if missing:
         raise ValueError(f"模板缺少占位符：{', '.join(sorted(missing))}")
+    if trim_trailing_blank_page:
+        # The information-card template ends with an empty body paragraph. LibreOffice
+        # renders it as a blank second page, so remove it from the generated copy only.
+        body = document._element.body
+        for element in reversed(list(body)):
+            if element.tag == qn('w:p') and not ''.join(element.itertext()).strip():
+                body.remove(element)
+                continue
+            break
     document.save(output_docx)
 
 def _exam_conclusion(exam):
@@ -276,7 +285,7 @@ def generate_information_card_pdf(record, exam):
     try:
         docx_path = os.path.join(work_dir, 'information_card.docx')
         text_values, image_values = _information_card_values(record, exam, work_dir)
-        _fill_template(INFO_CARD_TEMPLATE, docx_path, text_values, image_values)
+        _fill_template(INFO_CARD_TEMPLATE, docx_path, text_values, image_values, trim_trailing_blank_page=True)
         shutil.copyfile(_convert_docx_to_pdf(docx_path, work_dir), output_path)
         return output_path
     finally:
