@@ -262,7 +262,10 @@ def _information_card_values(record, exam, work_dir):
         '<hjks>': (_build_photo_sheet(exam_photos, work_dir, 'welding_exam'), 12.5),
         '<tszp>': (_build_photo_sheet(ndt_photos, work_dir, 'ndt'), 12.5),
         # Keep the issued certificate inside the bottom <hgk> cell of the one-page information card.
-        '<hgk>': (certificate_path if certificate_path and os.path.exists(certificate_path) else '', 5.0),
+        # The template reserves a 2,204-twip (about 3.9 cm) row for <hgk>.
+        # Keeping the image below that height prevents Word from moving the whole
+        # row to a second page while retaining the supplied template's layout.
+        '<hgk>': (certificate_path if certificate_path and os.path.exists(certificate_path) else '', 3.5),
     }
     return text_values, image_values
 
