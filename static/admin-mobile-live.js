@@ -146,6 +146,7 @@
   }
   function recordPanel() {
     var records = recordsForMobile();
+    var allRecordsSelected = records.length > 0 && records.every(function (record) { return selectedRecord(record.id); });
     var total = 0;
     var pending = 0;
     try { total = typeof recordsTotal !== 'undefined' ? recordsTotal : records.length; } catch (e) { total = records.length; }
@@ -171,7 +172,7 @@
         '<div class="download-chooser ' + (state.downloadOpen ? 'is-open' : '') + '"><h3>下载信息卡</h3><p>勾选人员后下载对应的信息卡 PDF。</p><div class="download-options"><button type="button" onclick="mobileAdminExport(\'info_cards\')">下载信息卡</button></div></div></div></div>' +
       '<div class="filter-panel ' + (state.recordFiltersOpen ? 'is-open' : '') + '"><div class="filter-group"><span class="filter-group-label">下载状态</span><div class="filter-options">' + status('all', '全部') + status('pending', '未下载') + status('downloaded', '已下载') + status('today', '今日录入') + '</div></div>' +
         '<div class="filter-panel-actions"><button type="button" onclick="mobileAdminClearRecordFilters()">重置</button><button type="button" class="apply-filter" onclick="mobileAdminToggleRecordFilters()">完成</button></div></div>' +
-      '<div class="section-heading"><h3>' + esc(selectedCompany || '全部培训单位') + '</h3><span>当前 ' + records.length + ' 人</span></div><div class="record-stack">' +
+      '<div class="section-heading"><h3>' + esc(selectedCompany || '全部培训单位') + '</h3><span class="record-selection-summary">当前 ' + records.length + ' 人 <button class="small-action select-page-action" type="button" onclick="mobileAdminTogglePageRecords()">' + (allRecordsSelected ? '取消全选' : '全选本页') + '</button></span></div><div class="record-stack">' +
       (records.length ? records.map(recordCard).join('') : '<div class="empty-state">没有符合条件的培训记录</div>') + '</div>' + recordPager() + '</section>';
   }
   function recordCard(r) {
@@ -476,6 +477,23 @@
   };
   window.mobileAdminToggleDownload = function (event) { if (event) event.stopPropagation(); state.downloadOpen = !state.downloadOpen; state.recordCompanyOpen = false; render(); };
   window.mobileAdminExport = function (format) { state.downloadOpen = false; render(); if (typeof window.exportData === 'function') window.exportData(format); };
+  window.mobileAdminTogglePageRecords = function () {
+    var rows = recordsForMobile();
+    var shouldSelect = rows.length > 0 && !rows.every(function (record) { return selectedRecord(record.id); });
+    try {
+      rows.forEach(function (record) {
+        if (shouldSelect) {
+          selectedRecordsMap.set(record.id, record);
+          deselectedRecordIds.delete(record.id);
+        } else {
+          selectedRecordsMap.delete(record.id);
+          deselectedRecordIds.add(record.id);
+        }
+      });
+      if (typeof window.renderRecords === 'function') window.renderRecords();
+    } catch (e) { render(); }
+    render();
+  };
   window.mobileAdminToggleRecord = function (id, checked) { if (typeof window.handleSingleCheckboxChange === 'function') window.handleSingleCheckboxChange({ checked: checked }, id); else render(); };
   window.mobileAdminDownloadInformationCard = function (id, name) {
     if (typeof window.downloadFileWithToken === 'function') window.downloadFileWithToken('/api/record/download_info_card/' + id, (name || '人员') + '信息卡.pdf', false);

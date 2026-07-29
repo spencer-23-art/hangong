@@ -288,7 +288,7 @@
       }
 
       /* 卡片式结构定制：历史记录照片绝对定位到卡片右上角 */
-      #history-table-body td:nth-child(1) {
+      #history-table-body td.history-photo-cell {
         position: static;
         width: 100% !important;
         height: auto !important;
@@ -315,7 +315,7 @@
       }
 
       /* 卡片式结构定制：文字信息列在右侧留白，防止遮挡 */
-      #history-table-body td:nth-child(2) {
+      #history-table-body td.history-details-cell {
         padding-right: 0 !important;
       }
 
@@ -338,6 +338,13 @@
       }
       #history-table-body td:last-child .history-record-actions { justify-content: center !important; }
       #history-table-body td:last-child .history-card-action-button { flex: 0 0 auto !important; width: 76px !important; }
+      #history-table-body td.history-select-cell {
+        display: inline-block !important;
+        width: auto !important;
+        margin-bottom: 7px;
+        padding: 0 !important;
+      }
+      .history-checkbox { width: 20px !important; height: 20px !important; }
       .history-photo-gallery { min-width: 0; gap: 5px; }
       .history-photo-item { padding: 4px; }
       .history-photo-label { font-size: 0.65rem; margin-bottom: 3px; }
@@ -559,12 +566,15 @@
       <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 15px;">
         <input type="text" id="history-search-name" class="form-control" placeholder="输入姓名搜索历史录入..." style="width: auto; padding: 6px 12px; margin-bottom: 0; min-width: 200px;" oninput="handleHistorySearch()">
         <button class="btn btn-secondary" style="width: auto; padding: 6px 12px;" onclick="clearHistorySearch()">清除搜索</button>
+        <button class="btn btn-secondary" id="history-select-all-button" style="width: auto; padding: 6px 12px;" onclick="toggleHistorySelectAllFromButton()">全选当前</button>
+        <button class="btn btn-primary" style="width: auto; padding: 6px 12px;" onclick="downloadSelectedHistoryInfoCards()">下载所选信息卡</button>
       </div>
 
       <div class="table-wrapper">
         <table>
           <thead>
             <tr>
+              <th style="width: 60px; text-align: center;"><input type="checkbox" id="history-check-all" aria-label="全选当前历史记录" onchange="toggleHistorySelectAll(this.checked)" style="width: 18px; height: 18px; cursor: pointer;"><span style="display:block;font-size:.72rem;white-space:nowrap;">全选</span></th>
               <th style="min-width: 300px; text-align: center;">证件照片</th>
               <th colspan="2" style="min-width: 410px;">人员、岗位与证件信息</th>
               <th style="width: 115px;">录入时间</th>
@@ -773,6 +783,7 @@
     let removedSitePhotoPaths = [];
     let currentEditRecordId = null;
     let historyData = [];
+    const selectedHistoryRecordIds = new Set();
 
     function compressImageFile(file, minSizeKB, maxSizeKB, callback) {
       if (typeof maxSizeKB === 'function') {
@@ -1264,7 +1275,8 @@
               examAction = '';
             }
             tr.innerHTML = `
-              <td style="vertical-align: top;">
+              <td class="history-select-cell" style="text-align:center; vertical-align:top;"><input type="checkbox" class="history-checkbox" value="${row.id}" ${selectedHistoryRecordIds.has(row.id) ? 'checked' : ''} aria-label="选择${escapeHtml(row.name)}" onchange="handleHistoryCheckboxChange(this, ${row.id})" style="width:18px;height:18px;cursor:pointer;"></td>
+              <td class="history-photo-cell" style="vertical-align: top;">
                 <div class="history-photo-gallery">
                   ${renderHistoryPhotoItem('大头照', headshotUrls)}
                   ${renderHistoryPhotoItem('焊工证', welderCertificateUrls)}
@@ -1305,11 +1317,12 @@
             `;
             tbody.appendChild(tr);
           });
+          updateHistoryCheckAllState();
         } else {
-          tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--danger-color);">${result.detail || '获取历史失败'}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger-color);">${result.detail || '获取历史失败'}</td></tr>`;
         }
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--danger-color);">网络错误，无法加载</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--danger-color);">网络错误，无法加载</td></tr>';
       }
     }
 
@@ -1327,7 +1340,45 @@
     }
 
     // 下载登记卡（用隐藏iframe，不离开当前页面，避免手机浏览器session丢失）
-    function downloadInfoCard(recordId) {
+    function updateHistoryCheckAllState() {
+      const checkAll = document.getElementById('history-check-all');
+      const button = document.getElementById('history-select-all-button');
+      if (!checkAll || !button) return;
+      const ids = historyData.map(row => row.id);
+      const selectedCount = ids.filter(id => selectedHistoryRecordIds.has(id)).length;
+      checkAll.checked = ids.length > 0 && selectedCount === ids.length;
+      checkAll.indeterminate = selectedCount > 0 && selectedCount < ids.length;
+      button.textContent = checkAll.checked ? '取消全选' : '全选当前';
+    }
+
+    function handleHistoryCheckboxChange(el, id) {
+      if (el.checked) selectedHistoryRecordIds.add(id);
+      else selectedHistoryRecordIds.delete(id);
+      updateHistoryCheckAllState();
+    }
+
+    function toggleHistorySelectAll(checked) {
+      historyData.forEach(row => {
+        if (checked) selectedHistoryRecordIds.add(row.id);
+        else selectedHistoryRecordIds.delete(row.id);
+      });
+      document.querySelectorAll('.history-checkbox').forEach(box => { box.checked = checked; });
+      updateHistoryCheckAllState();
+    }
+
+    function toggleHistorySelectAllFromButton() {
+      const allSelected = historyData.length > 0 && historyData.every(row => selectedHistoryRecordIds.has(row.id));
+      toggleHistorySelectAll(!allSelected);
+    }
+
+    function downloadSelectedHistoryInfoCards() {
+      const ids = historyData.map(row => row.id).filter(id => selectedHistoryRecordIds.has(id));
+      if (!ids.length) { showAlert('error', '请先选择需要下载的信息卡'); return; }
+      ids.forEach((recordId, index) => setTimeout(() => downloadInfoCard(recordId, true), index * 250));
+      showAlert('info', `正在下载 ${ids.length} 份信息卡...`);
+    }
+
+    function downloadInfoCard(recordId, silent = false) {
       const token = getSessionItem('token');
       if (!token) {
         showAlert('error', '登录已失效，请重新登录');
@@ -1345,7 +1396,7 @@
       }
       frame.src = url;
       // 友好提示
-      showAlert('info', '正在下载登记卡...');
+      if (!silent) showAlert('info', '正在下载信息卡...');
     }
 
     // 分享/发送登记卡链接
