@@ -48,6 +48,7 @@ import csv
 from PIL import Image, ImageDraw, ImageFont
 from docx import Document
 from docx.shared import Cm
+from docx.oxml.ns import qn
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.lib.pagesizes import A4
@@ -117,6 +118,13 @@ def _iter_template_paragraphs(document):
                 for paragraph in cell.paragraphs:
                     yield paragraph
 
+def _set_template_value_font(run):
+    """Force a CJK-capable font for text inserted into the user-provided Word templates."""
+    run.font.name = 'Noto Sans CJK SC'
+    fonts = run._element.get_or_add_rPr().get_or_add_rFonts()
+    for font_kind in ('ascii', 'hAnsi', 'eastAsia', 'cs'):
+        fonts.set(qn(f'w:{font_kind}'), 'Noto Sans CJK SC')
+
 def _replace_text_placeholder(paragraph, placeholder, value):
     if placeholder not in paragraph.text:
         return False
@@ -124,15 +132,18 @@ def _replace_text_placeholder(paragraph, placeholder, value):
     for run in paragraph.runs:
         if placeholder in run.text:
             run.text = run.text.replace(placeholder, replacement)
+            _set_template_value_font(run)
             return True
     # A Word placeholder can be split into several runs; consolidate it in the first run.
     full_text = paragraph.text.replace(placeholder, replacement)
     if paragraph.runs:
         paragraph.runs[0].text = full_text
+        _set_template_value_font(paragraph.runs[0])
         for run in paragraph.runs[1:]:
             run.text = ''
     else:
-        paragraph.add_run(full_text)
+        run = paragraph.add_run(full_text)
+        _set_template_value_font(run)
     return True
 
 def _replace_image_placeholder(paragraph, placeholder, image_path, width_cm):
