@@ -293,7 +293,7 @@ def generate_information_card_pdf(record, exam):
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
 
-def generate_qualification_certificate(record, exam, issuer_name):
+def generate_qualification_certificate(record, exam, issuer_name, issued_at):
     """Fill the supplied certificate placeholders and render the unchanged template as JPG."""
     work_dir = tempfile.mkdtemp(prefix='qualification_certificate_', dir=CARDS_DIR)
     output_path = os.path.join(CARDS_DIR, f"certificate_{record['id']}_{uuid.uuid4().hex}.jpg")
@@ -307,6 +307,7 @@ def generate_qualification_certificate(record, exam, issuer_name):
             '<ksxm>': _row_value(record, 'exam_project'),
             '<zjzyx>': _row_value(record, 'certificate_work_item'),
             '<pzr>': issuer_name,
+            '<time>': issued_at,
         }, {
             '<dtz>': (_row_value(record, 'photo_path'), 2.2),
         })
@@ -1915,8 +1916,9 @@ def issue_certificate(record_id: int, admin = Depends(get_admin_user)):
         if not exam or exam['result'] != 'qualified' or exam['ndt_status'] not in ('qualified', 'not_required'):
             raise HTTPException(status_code=400, detail="仅考试合格且探伤合格（或无需探伤）的人员可以签发合格证")
         issuer = (admin['real_name'] or admin['username']).strip()
-        path = generate_qualification_certificate(record, exam, issuer)
-        cursor.execute("UPDATE records SET certificate_path=?, certificate_issuer=?, certificate_issued_at=? WHERE id=?", (path, issuer, beijing_now().strftime('%Y-%m-%d %H:%M:%S'), record_id))
+        issued_at = beijing_now().strftime('%Y-%m-%d %H:%M:%S')
+        path = generate_qualification_certificate(record, exam, issuer, issued_at)
+        cursor.execute("UPDATE records SET certificate_path=?, certificate_issuer=?, certificate_issued_at=? WHERE id=?", (path, issuer, issued_at, record_id))
         conn.commit()
     return {'code': 200, 'message': '合格证已签发'}
 
