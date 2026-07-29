@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y \
     libx11-6 \
     libxext6 \
     libxrender1 \
+    fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -29,6 +30,7 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r re
 COPY main.py ocr_handler.py start_server.py /app/
 COPY app/ /app/app/
 COPY static/ /app/static/
+COPY templates/ /app/templates/
 COPY *.docx /tmp/templates/
 RUN set -eux; template="$(find /tmp/templates -maxdepth 1 -name '*.docx' -print -quit)"; test -n "$template"; cp "$template" /app/record_card_template.docx
 
@@ -36,4 +38,3 @@ RUN set -eux; template="$(find /tmp/templates -maxdepth 1 -name '*.docx' -print 
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-

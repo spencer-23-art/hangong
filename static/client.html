@@ -139,6 +139,13 @@
     .history-exit-control { display:flex; align-items:center; justify-content:center; gap:4px; flex-wrap:wrap; }
     .history-exit-date { width:118px; height:29px; padding:3px 5px; font-size:.74rem; }
     .form-control.field-missing { border-color:#f87171 !important; box-shadow:0 0 0 2px rgba(248,113,113,.18); }
+    /* 录入表单使用更紧凑的行距，保留移动端触控高度。 */
+    #form-record .form-group { margin-bottom:8px; }
+    #form-record .form-grid { gap:8px 10px !important; }
+    #form-record .form-control { min-height:36px; height:36px; padding:6px 9px; line-height:1.2; }
+    #form-record label { margin-bottom:3px; font-size:.82rem; line-height:1.1; }
+    #form-record .photo-uploader-row { margin-bottom:4px; }
+    @media (max-width:640px) { #form-record .form-control { min-height:40px; height:40px; } }
     @media (max-width: 640px) {
       .photo-uploader-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
       .photo-uploader-row .photo-uploader { width: 100% !important; height: clamp(128px, 42vw, 200px) !important; margin: 0 !important; }
@@ -1239,7 +1246,7 @@
             const idCardUrls = row.id_card ? [`/uploads/idcards/${encodeURIComponent(row.id_card)}.png?token=${encodeURIComponent(getSessionItem('token') || '')}`] : [];
             const recordLocked = row.latest_welding_exam_result === 'qualified' && ['qualified', 'not_required'].includes(row.latest_welding_ndt_status);
             const examResultText = row.latest_welding_exam_result === 'qualified' ? (row.latest_welding_ndt_status === 'pending' ? '合格·待探伤' : '合格') : (row.latest_welding_exam_result === 'unqualified' ? (Number(row.welding_exam_count) >= 2 ? '不合格' : '待补考') : '未考试');
-            const ndtResultText = row.latest_welding_exam_result !== 'qualified' ? '--' : (row.latest_welding_ndt_status === 'qualified' ? '探伤合格' : (row.latest_welding_ndt_status === 'pending' ? '待探伤' : '无需探伤'));
+            const ndtResultText = row.latest_welding_exam_result !== 'qualified' ? '--' : (row.latest_welding_ndt_status === 'qualified' ? '探伤合格' : (row.latest_welding_ndt_status === 'unqualified' ? '探伤不合格' : (row.latest_welding_ndt_status === 'pending' ? '待探伤' : '无需探伤')));
             let examAction;
             if (row.latest_welding_exam_result === 'qualified' && row.latest_welding_ndt_status === 'pending') {
               examAction = `<button type="button" class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px;" onclick="startNdt(${row.id})">待探伤</button>`;
@@ -1284,10 +1291,7 @@
               <td style="text-align: center; vertical-align: middle;">
                 <div class="history-record-actions" style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
                   ${recordLocked ? `<button class="btn btn-secondary history-card-action-button" style="padding:5px 12px;font-size:.8rem;margin:0;width:auto;min-width:60px;opacity:.65;" disabled>已锁定</button>` : `<button class="btn btn-success history-card-action-button" style="padding:5px 12px;font-size:.8rem;margin:0;width:auto;min-width:60px;" onclick="editRecord(${row.id})">修改</button>`}
-                  ${row.word_path ?
-                    `<button class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; box-sizing: border-box;" onclick="downloadWord(${row.id})">登记卡下载</button>` :
-                    `<button class="btn btn-secondary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; opacity: 0.5; margin: 0; width: auto; min-width: 60px;" disabled title="已失效或未生成">登记卡下载</button>`
-                  }
+                  <button class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; box-sizing: border-box;" onclick="downloadInfoCard(${row.id})">信息卡下载</button>
                   ${examAction}
                   ${recordLocked ? (row.exit_date ? `<span class="history-exit-control"><span style="color:var(--text-muted);font-size:.76rem;">退场</span><strong style="font-size:.78rem;">${escapeHtml(row.exit_date)}</strong></span>` : `<span class="history-exit-control"><input id="exit-date-${row.id}" class="form-control history-exit-date" type="date"><button class="btn btn-danger history-card-action-button" style="padding:5px 9px;font-size:.76rem;margin:0;width:auto;min-width:48px;" onclick="setRecordExit(${row.id})">退场</button></span>`) : ''}
                 </div>
@@ -1317,14 +1321,14 @@
     }
 
     // 下载登记卡（用隐藏iframe，不离开当前页面，避免手机浏览器session丢失）
-    function downloadWord(recordId) {
+    function downloadInfoCard(recordId) {
       const token = getSessionItem('token');
       if (!token) {
         showAlert('error', '登录已失效，请重新登录');
         setTimeout(() => window.location.href = '/login', 1500);
         return;
       }
-      const url = `/api/record/download_word/${recordId}?token=${encodeURIComponent(token)}`;
+      const url = `/api/record/download_info_card/${recordId}?token=${encodeURIComponent(token)}`;
       // 用隐藏iframe触发下载，浏览器不会导航离开当前页
       let frame = document.getElementById('download-frame');
       if (!frame) {
@@ -1341,7 +1345,7 @@
     // 分享/发送登记卡链接
     function shareDownloadLink(recordId) {
       const token = getSessionItem('token');
-      const url = `${window.location.protocol}//${window.location.host}/api/record/download_word/${recordId}?token=${encodeURIComponent(token)}`;
+      const url = `${window.location.protocol}//${window.location.host}/api/record/download_info_card/${recordId}?token=${encodeURIComponent(token)}`;
       
       const ua = navigator.userAgent.toLowerCase();
       const isWeixin = ua.indexOf('micromessenger') !== -1;

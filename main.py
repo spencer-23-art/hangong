@@ -43,6 +43,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import openpyxl
 import csv
+from PIL import Image, ImageDraw, ImageFont
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 
 # 引入 OCR 核心
 try:
@@ -64,7 +70,129 @@ except Exception as e:
 
 
 # D6: 统一从 app.config 引用路径常量，避免多处重复定义
-from app.config import DB_PATH, UPLOAD_DIR, TEMP_IDS_DIR, REDIS_URL
+from app.config import DB_PATH, UPLOAD_DIR, TEMP_IDS_DIR, REDIS_URL, CARDS_DIR
+
+TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
+INFO_CARD_TEMPLATE = os.path.join(TEMPLATE_DIR, 'information_card.docx')
+CERTIFICATE_TEMPLATE = os.path.join(TEMPLATE_DIR, 'qualification_certificate.docx')
+
+def _download_filename(name, suffix):
+    return f"{(name or '人员').strip()}{suffix}"
+
+def _latest_welding_exam(cursor, record_id):
+    cursor.execute('''
+        SELECT w.*, (SELECT COUNT(*) FROM welding_skill_exams x WHERE x.record_id = w.record_id) AS attempt_number
+        FROM welding_skill_exams w WHERE w.record_id = ? ORDER BY w.id DESC LIMIT 1
+    ''', (record_id,))
+    return cursor.fetchone()
+
+def _safe_photo_paths(value):
+    try:
+        return [p for p in json.loads(value or '[]') if isinstance(p, str) and os.path.exists(p)]
+    except Exception:
+        return []
+
+def _draw_photo(canvas_obj, path, x, y, width, height):
+    if path and os.path.exists(path):
+        try:
+            canvas_obj.drawImage(ImageReader(path), x, y, width=width, height=height, preserveAspectRatio=True, anchor='c', mask='auto')
+            return
+        except Exception:
+            pass
+    canvas_obj.rect(x, y, width, height)
+    canvas_obj.drawCentredString(x + width / 2, y + height / 2, '暂无图片')
+
+def generate_information_card_pdf(record, exam):
+    """Use the supplied 信息卡 template's fields to generate a portable PDF information card."""
+    if not os.path.exists(INFO_CARD_TEMPLATE):
+        raise FileNotFoundError('未找到信息卡.docx 模板')
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+    except Exception:
+        pass
+    output_path = os.path.join(CARDS_DIR, f"info_{record['id']}_{uuid.uuid4().hex}.pdf")
+    page_w, page_h = A4
+    pdf = canvas.Canvas(output_path, pagesize=A4)
+    pdf.setTitle('焊工信息登记卡')
+    pdf.setFont('STSong-Light', 16)
+    pdf.drawCentredString(page_w / 2, page_h - 36, '焊工信息登记卡')
+    pdf.setFont('STSong-Light', 9)
+    exam_time = (exam['created_at'] if exam else record['created_at']) or ''
+    fields = [
+        ('焊工姓名', record['name']), ('焊工编号', record['welder_code']),
+        ('项目名称', record['exam_project']), ('施工单位', record['company']),
+        ('施工区域', record['region_auth']), ('身份证号', record['id_card']),
+        ('班组', record['team']), ('考试时间', exam_time[:10]),
+        ('考试项目', record['exam_project']), ('证件作业项', record['certificate_work_item']),
+        ('证件有效期', record['certificate_expiry']),
+        ('考试结果', '未考试' if not exam else ('合格' if exam['result'] == 'qualified' else '不合格')),
+        ('是否补考', '是' if exam and exam['attempt_number'] > 1 else '否'),
+        ('是否探伤', '--' if not exam else ('需要探伤' if exam['ndt_required'] else '无需探伤')),
+        ('探伤结果', '--' if not exam else ({'qualified':'合格','unqualified':'不合格','pending':'待探伤','not_required':'无需探伤'}.get(exam['ndt_status'], '--'))),
+        ('缺陷问题', '' if not exam else (exam['defect_issues'] or '--')),
+    ]
+    x, y, row_h, label_w, value_w = 36, page_h - 72, 25, 65, 196
+    for index, (label, value) in enumerate(fields):
+        col = index % 2
+        row = index // 2
+        px, py = x + col * (label_w + value_w), y - row * row_h
+        pdf.rect(px, py - row_h, label_w, row_h)
+        pdf.rect(px + label_w, py - row_h, value_w, row_h)
+        pdf.drawString(px + 5, py - 16, label)
+        pdf.drawString(px + label_w + 5, py - 16, str(value or '--')[:42])
+    photo_top = y - ((len(fields) + 1) // 2) * row_h - 16
+    pdf.setFont('STSong-Light', 10)
+    pdf.drawString(36, photo_top, '大头像')
+    _draw_photo(pdf, record['photo_path'], 36, photo_top - 110, 94, 94)
+    groups = _parse_site_photo_paths(record['site_photo_paths'])
+    exam_photos = _safe_photo_paths(exam['photo_paths']) if exam else []
+    ndt_photos = _safe_photo_paths(exam['ndt_photo_paths']) if exam else []
+    galleries = [('焊工上岗证', groups.get('1', [])), ('特种作业证', groups.get('2', [])), ('技能考试', exam_photos), ('探伤照片', ndt_photos)]
+    for i, (title, paths) in enumerate(galleries):
+        gx = 148 + i * 102
+        pdf.drawString(gx, photo_top, title)
+        _draw_photo(pdf, paths[0] if paths else '', gx, photo_top - 110, 90, 94)
+    pdf.setFont('STSong-Light', 8)
+    pdf.drawString(36, 28, '本信息卡依据录入资料、证件照片、焊接技能考试及探伤记录自动生成。')
+    pdf.save()
+    return output_path
+
+def _certificate_font(size):
+    for path in ('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', 'C:/Windows/Fonts/msyh.ttc'):
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size)
+    return ImageFont.load_default()
+
+def generate_qualification_certificate(record, exam, issuer_name):
+    """Create the supplied 合格证 template's content as a 8.56cm × 5.4cm JPG."""
+    if not os.path.exists(CERTIFICATE_TEMPLATE):
+        raise FileNotFoundError('未找到合格证.docx 模板')
+    width, height = 506, 319  # 8.56cm × 5.4cm at 150dpi
+    image = Image.new('RGB', (width, height), '#fffdf5')
+    draw = ImageDraw.Draw(image)
+    title_font, body_font, small_font = _certificate_font(23), _certificate_font(15), _certificate_font(12)
+    draw.rectangle((3, 3, width - 4, height - 4), outline='#b78b34', width=3)
+    draw.text((150, 18), '焊工技能验证合格证', font=title_font, fill='#7b5213')
+    rows = [
+        ('姓名：', record['name'], '焊工号：', record['welder_code']),
+        ('施工单位：', record['company'], '', ''),
+        ('项目名称：', record['exam_project'], '', ''),
+        ('考试项目：', record['exam_project'], '', ''),
+        ('证件作业项：', record['certificate_work_item'], '', ''),
+        ('批准人：', issuer_name, '签发时间：', datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d')),
+    ]
+    top, line_h = 63, 35
+    for i, (l1, v1, l2, v2) in enumerate(rows):
+        y = top + i * line_h
+        draw.line((20, y + 27, width - 20, y + 27), fill='#c9b27b', width=1)
+        draw.text((28, y), l1, font=body_font, fill='#3f2c0e')
+        draw.text((90, y), str(v1 or '--')[:22], font=body_font, fill='#1f2937')
+        if l2:
+            draw.text((282, y), l2, font=body_font, fill='#3f2c0e')
+            draw.text((365, y), str(v2 or '--')[:13], font=small_font, fill='#1f2937')
+    path = os.path.join(CARDS_DIR, f"certificate_{record['id']}_{uuid.uuid4().hex}.jpg")
+    image.save(path, 'JPEG', quality=95, dpi=(150, 150))
+    return path
 
 # 默认考试科目（供首次初始化及回退使用）。R3：原本在 5 处重复，现统一为常量。
 DEFAULT_EXAM_SUBJECTS = [
@@ -689,6 +817,9 @@ def init_db():
         welder_code TEXT DEFAULT '',
         team TEXT DEFAULT '',
         exit_date TEXT DEFAULT '',
+        certificate_path TEXT DEFAULT '',
+        certificate_issuer TEXT DEFAULT '',
+        certificate_issued_at TEXT DEFAULT '',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )
@@ -754,7 +885,7 @@ def init_db():
         conn.commit()
     except sqlite3.OperationalError:
         pass
-    for column in ('exam_project', 'certificate_work_item', 'certificate_expiry', 'welder_code', 'team', 'exit_date'):
+    for column in ('exam_project', 'certificate_work_item', 'certificate_expiry', 'welder_code', 'team', 'exit_date', 'certificate_path', 'certificate_issuer', 'certificate_issued_at'):
         try:
             cursor.execute(f"ALTER TABLE records ADD COLUMN {column} TEXT DEFAULT ''")
             conn.commit()
@@ -1617,6 +1748,52 @@ def download_word(record_id: int, token: str = None, authorization: str = Header
         headers=headers
     )
 
+@app.get("/api/record/download_info_card/{record_id}")
+def download_info_card(record_id: int, token: str = None, authorization: str = Header(None)):
+    auth_token = token or authorization
+    user_info = verify_token(auth_token) if auth_token else None
+    if not user_info:
+        raise HTTPException(status_code=401, detail="请重新登录")
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if user_info['role'] == 'admin':
+            cursor.execute("SELECT r.*, COALESCE(NULLIF(r.company, ''), u.company, '') AS company FROM records r LEFT JOIN users u ON r.user_id=u.id WHERE r.id=?", (record_id,))
+        else:
+            cursor.execute("SELECT r.*, COALESCE(NULLIF(r.company, ''), u.company, '') AS company FROM records r LEFT JOIN users u ON r.user_id=u.id WHERE r.id=? AND r.user_id=?", (record_id, user_info['id']))
+        record = cursor.fetchone()
+        if not record:
+            raise HTTPException(status_code=404, detail="信息卡未找到或无权下载")
+        exam = _latest_welding_exam(cursor, record_id)
+        path = generate_information_card_pdf(record, exam)
+    return FileResponse(path, media_type='application/pdf', headers={'Content-Disposition': f"attachment; filename*=utf-8''{urllib.parse.quote(_download_filename(record['name'], '信息卡.pdf'))}"})
+
+@app.post("/api/admin/record/{record_id}/issue_certificate")
+def issue_certificate(record_id: int, admin = Depends(get_admin_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT r.*, COALESCE(NULLIF(r.company, ''), u.company, '') AS company FROM records r LEFT JOIN users u ON r.user_id=u.id WHERE r.id=?", (record_id,))
+        record = cursor.fetchone()
+        if not record:
+            raise HTTPException(status_code=404, detail="人员记录不存在")
+        exam = _latest_welding_exam(cursor, record_id)
+        if not exam or exam['result'] != 'qualified' or exam['ndt_status'] not in ('qualified', 'not_required'):
+            raise HTTPException(status_code=400, detail="仅考试合格且探伤合格（或无需探伤）的人员可以签发合格证")
+        issuer = (admin['real_name'] or admin['username']).strip()
+        path = generate_qualification_certificate(record, exam, issuer)
+        cursor.execute("UPDATE records SET certificate_path=?, certificate_issuer=?, certificate_issued_at=? WHERE id=?", (path, issuer, beijing_now().strftime('%Y-%m-%d %H:%M:%S'), record_id))
+        conn.commit()
+    return {'code': 200, 'message': '合格证已签发'}
+
+@app.get("/api/admin/record/{record_id}/download_certificate")
+def download_certificate(record_id: int, admin = Depends(get_admin_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, certificate_path FROM records WHERE id=?", (record_id,))
+        record = cursor.fetchone()
+    if not record or not record['certificate_path'] or not os.path.exists(record['certificate_path']):
+        raise HTTPException(status_code=404, detail="合格证尚未签发")
+    return FileResponse(record['certificate_path'], media_type='image/jpeg', headers={'Content-Disposition': f"attachment; filename*=utf-8''{urllib.parse.quote(_download_filename(record['name'], '合格证.jpg'))}"})
+
 # 录入培训数据
 @app.post("/api/record")
 async def create_record(
@@ -1871,12 +2048,15 @@ async def save_welding_skill_exam(
 @app.post("/api/welding-skill-exam/ndt")
 async def complete_welding_ndt(
     record_id: int = Form(...),
+    result: str = Form("qualified"),
     photos: list[UploadFile] = File(default=[]),
     current_user = Depends(get_current_user)
 ):
     """保存探伤合格照片，并完成待探伤的焊接技能考试。"""
     if current_user['role'] == 'admin':
         raise HTTPException(status_code=403, detail="探伤仅可由对应的注册用户录入")
+    if result not in ('qualified', 'unqualified'):
+        raise HTTPException(status_code=400, detail="探伤结果无效")
     uploaded_photos = [photo for photo in (photos or []) if photo and photo.filename]
     if not uploaded_photos:
         raise HTTPException(status_code=400, detail="请至少拍摄一张探伤照片")
@@ -1916,9 +2096,9 @@ async def complete_welding_ndt(
                 written_paths.append(path)
             cursor.execute('''
                 UPDATE welding_skill_exams
-                SET ndt_status = 'qualified', ndt_photo_paths = ?
+                SET ndt_status = ?, ndt_photo_paths = ?
                 WHERE id = ?
-            ''', (json.dumps(written_paths, ensure_ascii=False), exam['id']))
+            ''', (result, json.dumps(written_paths, ensure_ascii=False), exam['id']))
             conn.commit()
         except Exception:
             for path in written_paths:
@@ -1928,7 +2108,7 @@ async def complete_welding_ndt(
                     pass
             raise
 
-    return {"code": 200, "message": "探伤合格已保存", "photo_count": len(written_paths)}
+    return {"code": 200, "message": "探伤合格已保存" if result == 'qualified' else "探伤不合格已保存", "photo_count": len(written_paths)}
 
 # 修改已录入的信息（仅能修改属于自己的记录）
 @app.post("/api/record/exit")
@@ -3890,6 +4070,18 @@ def update_admin_password(
         raise HTTPException(status_code=500, detail="修改密码失败")
     finally:
         conn.close()
+
+@app.post("/api/admin/profile/name")
+def update_admin_profile_name(real_name: str = Form(...), admin = Depends(get_admin_user)):
+    clean_name = real_name.strip()
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="姓名不能为空")
+    if len(clean_name) > 50:
+        raise HTTPException(status_code=400, detail="姓名不能超过50个字符")
+    with get_db() as conn:
+        conn.execute("UPDATE users SET real_name=? WHERE id=?", (clean_name, admin['id']))
+        conn.commit()
+    return {"code": 200, "message": "姓名已保存"}
 
 # 获取二级管理员列表（仅超级管理员）
 @app.get("/api/admin/sub_admins")
