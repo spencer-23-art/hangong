@@ -145,7 +145,13 @@
     #form-record .form-control { min-height:36px; height:36px; padding:6px 9px; line-height:1.2; }
     #form-record label { margin-bottom:3px; font-size:.82rem; line-height:1.1; }
     #form-record .photo-uploader-row { margin-bottom:4px; }
-    @media (max-width:640px) { #form-record .form-control { min-height:40px; height:40px; } }
+    @media (max-width:768px) {
+      /* 覆盖通用移动端 App 样式，录入表单保持高信息密度。 */
+      #form-record .form-group { margin-bottom:7px !important; }
+      #form-record .form-grid { gap:7px 8px !important; }
+      #form-record .form-control { min-height:38px !important; height:38px !important; padding:5px 8px !important; font-size:.86rem !important; }
+      #form-record label { margin-bottom:2px !important; font-size:.74rem !important; line-height:1.1 !important; }
+    }
     @media (max-width: 640px) {
       .photo-uploader-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
       .photo-uploader-row .photo-uploader { width: 100% !important; height: clamp(128px, 42vw, 200px) !important; margin: 0 !important; }

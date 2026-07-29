@@ -161,7 +161,7 @@
   #mobile-admin-live .section-heading h3 { margin:0; font-size:.95rem; font-weight:650; }
   #mobile-admin-live .section-heading span { color:var(--app-muted); font-size:.76rem; }
   #mobile-admin-live .record-stack { display:grid; gap:10px; }
-  #mobile-admin-live .record-card { padding:12px; }
+  #mobile-admin-live .record-card { padding:9px; }
   #mobile-admin-live .record-card.is-downloaded { opacity:.54; filter:grayscale(.82); }
   #mobile-admin-live .record-card.is-selected { border-color:rgba(165,180,252,.85); box-shadow:0 0 0 1px rgba(99,102,241,.34) inset; }
   #mobile-admin-live .record-head { gap:10px; }
@@ -177,11 +177,11 @@
   #mobile-admin-live .person-meta { margin-top:3px; color:var(--app-muted); font-size:.75rem; }
   #mobile-admin-live .state-pill { flex:0 0 auto; padding:4px 7px; border-radius:8px; color:#e0e7ff; background:rgba(79,70,229,.30); font-size:.69rem; white-space:nowrap; }
   #mobile-admin-live .state-pill.warning { color:#fef3c7; background:rgba(245,158,11,.22); }
-  #mobile-admin-live .record-details { display:grid; grid-template-columns:1fr 1fr; gap:7px 10px; margin:11px 0 9px; padding:9px 0; border-top:1px solid var(--app-line); border-bottom:1px solid var(--app-line); }
-  #mobile-admin-live .record-details div { min-width:0; color:var(--app-muted); font-size:.72rem; }
-  #mobile-admin-live .record-details strong { display:block; overflow:hidden; margin-top:3px; color:var(--app-text); font-size:.79rem; font-weight:550; text-overflow:ellipsis; white-space:nowrap; }
+  #mobile-admin-live .record-details { display:grid; grid-template-columns:1fr 1fr; gap:5px 8px; margin:7px 0; padding:6px 0; border-top:1px solid var(--app-line); border-bottom:1px solid var(--app-line); }
+  #mobile-admin-live .record-details div { min-width:0; color:var(--app-muted); font-size:.67rem; line-height:1.1; }
+  #mobile-admin-live .record-details strong { display:block; overflow:hidden; margin-top:2px; color:var(--app-text); font-size:.74rem; line-height:1.15; font-weight:550; text-overflow:ellipsis; white-space:nowrap; }
   #mobile-admin-live .record-details .wide { grid-column:1 / -1; }
-  #mobile-admin-live .record-photo-gallery { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; margin:10px 0 2px; }
+  #mobile-admin-live .record-photo-gallery { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; margin:7px 0 1px; }
   #mobile-admin-live .record-photo-slot { min-width:0; padding:4px; border:1px solid var(--app-line); border-radius:8px; background:rgba(255,255,255,.025); }
   #mobile-admin-live .record-photo-slot small { display:block; overflow:hidden; color:var(--app-muted); font-size:.61rem; line-height:1.25; text-align:center; text-overflow:ellipsis; white-space:nowrap; }
   #mobile-admin-live .record-photo-slot > div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px; margin-top:3px; }
@@ -189,10 +189,10 @@
   #mobile-admin-live .record-photo-slot button { min-width:0; aspect-ratio:3/4; padding:0; overflow:hidden; border:0; border-radius:4px; background:#1e293b; cursor:zoom-in; }
   #mobile-admin-live .record-photo-slot img { width:100%; height:100%; object-fit:cover; display:block; }
   #mobile-admin-live .record-photo-slot span { display:flex; align-items:center; justify-content:center; min-height:45px; color:var(--app-muted); font-size:.62rem; }
-  #mobile-admin-live .card-footer { justify-content:space-between; gap:10px; }
-  #mobile-admin-live .record-time { color:var(--app-muted); font-size:.74rem; }
+  #mobile-admin-live .card-footer { justify-content:space-between; gap:7px; }
+  #mobile-admin-live .record-time { color:var(--app-muted); font-size:.68rem; }
   #mobile-admin-live .small-action,
-  #mobile-admin-live .exam-detail-button { min-height:30px; padding:5px 8px; border:1px solid rgba(199,210,254,.26); border-radius:8px; color:#e0e7ff; background:rgba(79,70,229,.22); font-size:.73rem; }
+  #mobile-admin-live .exam-detail-button { min-height:28px; padding:4px 7px; border:1px solid rgba(199,210,254,.26); border-radius:8px; color:#e0e7ff; background:rgba(79,70,229,.22); font-size:.69rem; }
   #mobile-admin-live .mobile-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; }
   #mobile-admin-live .warning-action { border-color:rgba(251,191,36,.3); color:#fef3c7; background:rgba(245,158,11,.17); }
   #mobile-admin-live .danger-action { border-color:rgba(248,113,113,.32); color:#fecaca; background:rgba(239,68,68,.18); }

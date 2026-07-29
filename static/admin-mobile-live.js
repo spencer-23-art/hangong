@@ -41,7 +41,9 @@
       cleanupStart: '',
       cleanupEnd: '',
       cleanupPreview: null,
-      cleanupResult: null
+      cleanupResult: null,
+      profileName: '',
+      profileLoaded: false
     }
   };
 
@@ -166,7 +168,7 @@
         '<div class="company-options ' + (state.recordCompanyOpen ? 'is-open' : '') + '">' + companyButtons + '</div></div>' +
       '<button class="toolbar-btn" type="button" aria-label="筛选培训记录" onclick="mobileAdminToggleRecordFilters(event)">' + icon('filter') + '</button>' +
       '<div class="download-wrap"><button class="toolbar-btn" type="button" aria-label="下载所选人员" onclick="mobileAdminToggleDownload(event)">' + icon('download') + '</button>' +
-        '<div class="download-chooser ' + (state.downloadOpen ? 'is-open' : '') + '"><h3>选择下载内容</h3><p>可按需要只下载一种内容。</p><div class="download-options"><button type="button" onclick="mobileAdminExport(\'excel\')">下载 Excel</button><button type="button" onclick="mobileAdminExport(\'csv\')">下载 CSV</button><button type="button" onclick="mobileAdminExport(\'photos\')">下载照片包</button></div></div></div></div>' +
+        '<div class="download-chooser ' + (state.downloadOpen ? 'is-open' : '') + '"><h3>下载信息卡</h3><p>勾选人员后下载对应的信息卡 PDF。</p><div class="download-options"><button type="button" onclick="mobileAdminExport(\'info_cards\')">下载信息卡</button></div></div></div></div>' +
       '<div class="filter-panel ' + (state.recordFiltersOpen ? 'is-open' : '') + '"><div class="filter-group"><span class="filter-group-label">下载状态</span><div class="filter-options">' + status('all', '全部') + status('pending', '未下载') + status('downloaded', '已下载') + status('today', '今日录入') + '</div></div>' +
         '<div class="filter-panel-actions"><button type="button" onclick="mobileAdminClearRecordFilters()">重置</button><button type="button" class="apply-filter" onclick="mobileAdminToggleRecordFilters()">完成</button></div></div>' +
       '<div class="section-heading"><h3>' + esc(selectedCompany || '全部培训单位') + '</h3><span>当前 ' + records.length + ' 人</span></div><div class="record-stack">' +
@@ -176,7 +178,11 @@
     var downloaded = Number(r.is_gate_downloaded) === 1;
     var checked = selectedRecord(r.id);
     var examResult = r.latest_welding_exam_result === 'qualified' ? (r.latest_welding_ndt_status === 'pending' ? '合格·待探伤' : '合格') : (r.latest_welding_exam_result === 'unqualified' ? (Number(r.welding_exam_count) >= 2 ? '不合格' : '待补考') : '未考试');
-    var ndtResult = r.latest_welding_exam_result !== 'qualified' ? '--' : (r.latest_welding_ndt_status === 'qualified' ? '探伤合格' : (r.latest_welding_ndt_status === 'pending' ? '待探伤' : '无需探伤'));
+    var ndtResult = r.latest_welding_exam_result !== 'qualified' ? '--' : (r.latest_welding_ndt_status === 'qualified' ? '探伤合格' : (r.latest_welding_ndt_status === 'unqualified' ? '探伤不合格' : (r.latest_welding_ndt_status === 'pending' ? '待探伤' : '无需探伤')));
+    var certificateEligible = r.latest_welding_exam_result === 'qualified' && ['qualified', 'not_required'].indexOf(r.latest_welding_ndt_status) !== -1;
+    var certificateAction = certificateEligible ? (r.certificate_path
+      ? '<button class="small-action success-action" type="button" onclick="mobileAdminDownloadCertificate(' + Number(r.id) + ',' + jsArg(r.name) + ')">下载合格证</button>'
+      : '<button class="small-action warning-action" type="button" onclick="mobileAdminIssueCertificate(' + Number(r.id) + ')">签发</button>') : '';
     var examAction = '';
     if (r.latest_welding_exam_result === 'qualified' && r.latest_welding_ndt_status === 'pending') {
       examAction = '<button class="small-action" type="button" disabled>待探伤</button>';
@@ -190,7 +196,7 @@
     return '<article class="record-card ' + (downloaded ? 'is-downloaded' : '') + ' ' + (checked ? 'is-selected' : '') + '"><div class="record-head"><input class="record-select" type="checkbox" ' + (checked ? 'checked' : '') + ' aria-label="选择' + esc(r.name) + '" onchange="mobileAdminToggleRecord(' + Number(r.id) + ',this.checked)"><div class="person-line"><div class="person"><div class="avatar">' + esc(initials(r.name)) + '</div><div><div class="person-name">' + esc(r.name) + '</div><div class="person-meta">' + esc(r.gender || '--') + ' · ' + esc(r.age || '--') + '岁</div></div></div><span class="state-pill ' + (downloaded ? '' : 'warning') + '">' + (downloaded ? '已下载' : '待下载') + '</span></div></div>' +
       recordPhotoGallery(r) +
       '<div class="record-details"><div><span>身份证号</span><strong>' + esc(r.id_card || '--') + '</strong></div><div><span>联系电话</span><strong>' + esc(r.phone || '--') + '</strong></div><div><span>培训单位</span><strong>' + esc(r.company || '--') + '</strong></div><div><span>岗位 / 区域</span><strong>' + esc(r.job || '--') + ' · ' + esc(r.region_auth || '--') + '</strong></div><div><span>班组</span><strong>' + esc(r.team || '--') + '</strong></div><div><span>考试项目</span><strong>' + esc(r.exam_project || '--') + '</strong></div><div><span>证件作业项</span><strong>' + esc(r.certificate_work_item || '--') + '</strong></div><div><span>证件有效期</span><strong>' + esc(r.certificate_expiry || '--') + '</strong></div><div><span>焊工代号</span><strong>' + esc(r.welder_code || '--') + '</strong></div><div><span>考试结果</span><strong>' + esc(examResult) + '</strong></div><div><span>探伤结果</span><strong>' + esc(ndtResult) + '</strong></div><div class="wide"><span>地址</span><strong>' + esc(r.address || '--') + '</strong></div></div>' +
-      '<div class="card-footer"><span class="record-time">录入 ' + esc(displayTime(r.created_at)) + '</span><span class="mobile-actions"><button class="small-action" type="button" onclick="openRecordDetail(' + Number(r.id) + ')">详情</button>' + examAction + '<button class="small-action danger-action" type="button" onclick="deleteRecord(' + Number(r.id) + ')">删除</button></span></div></article>';
+      '<div class="card-footer"><span class="record-time">录入 ' + esc(displayTime(r.created_at)) + '</span><span class="mobile-actions"><button class="small-action" type="button" onclick="openRecordDetail(' + Number(r.id) + ')">详情</button><button class="small-action" type="button" onclick="mobileAdminDownloadInformationCard(' + Number(r.id) + ',' + jsArg(r.name) + ')">信息卡</button>' + examAction + certificateAction + '<button class="small-action danger-action" type="button" onclick="deleteRecord(' + Number(r.id) + ')">删除</button></span></div></article>';
   }
   function recordPager() {
     var page = 1, total = 0, limit = 20;
@@ -375,7 +381,7 @@
       '<div class="settings-form-actions"><button type="button" onclick="mobileAdminPreviewCleanup()">预览范围</button><button class="settings-primary" type="button" style="background:#dc2626;border-color:#ef4444;" ' + (state.settings.busy ? 'disabled' : '') + ' onclick="mobileAdminRunCleanup()">永久清理</button></div>' + feedback + '</div>';
   }
   function settingsPasswordPanel() {
-    return settingsDetailHeader('修改密码', '更新当前管理员密码') + '<div class="sheet settings-form"><label>当前密码<input id="mobile-password-old" type="password" autocomplete="current-password"></label><label>新密码<input id="mobile-password-new" type="password" autocomplete="new-password" placeholder="至少 6 位"></label><label>确认新密码<input id="mobile-password-confirm" type="password" autocomplete="new-password"></label><button class="settings-primary" type="button" onclick="mobileAdminChangePassword()">保存新密码</button></div>';
+    return settingsDetailHeader('管理员账户', '维护签发姓名及密码') + '<div class="sheet settings-form"><label>姓名（用于合格证批准人）<input id="mobile-profile-name" type="text" maxlength="50" value="' + esc(state.settings.profileName) + '" placeholder="请输入姓名"></label><button class="settings-primary" type="button" onclick="mobileAdminSaveProfileName()">保存姓名</button><label>当前密码<input id="mobile-password-old" type="password" autocomplete="current-password"></label><label>新密码<input id="mobile-password-new" type="password" autocomplete="new-password" placeholder="至少 6 位"></label><label>确认新密码<input id="mobile-password-confirm" type="password" autocomplete="new-password"></label><button class="settings-primary" type="button" onclick="mobileAdminChangePassword()">保存新密码</button></div>';
   }
   function nav() {
     var tabs = [['records', '记录', 'records'], ['pending', '注册', 'users'], ['restore', '恢复', 'restore'], ['exam', '考试', 'exam'], ['settings', '设置', 'settings']];
@@ -471,6 +477,21 @@
   window.mobileAdminToggleDownload = function (event) { if (event) event.stopPropagation(); state.downloadOpen = !state.downloadOpen; state.recordCompanyOpen = false; render(); };
   window.mobileAdminExport = function (format) { state.downloadOpen = false; render(); if (typeof window.exportData === 'function') window.exportData(format); };
   window.mobileAdminToggleRecord = function (id, checked) { if (typeof window.handleSingleCheckboxChange === 'function') window.handleSingleCheckboxChange({ checked: checked }, id); else render(); };
+  window.mobileAdminDownloadInformationCard = function (id, name) {
+    if (typeof window.downloadFileWithToken === 'function') window.downloadFileWithToken('/api/record/download_info_card/' + id, (name || '人员') + '信息卡.pdf', false);
+  };
+  window.mobileAdminDownloadCertificate = function (id, name) {
+    if (typeof window.downloadFileWithToken === 'function') window.downloadFileWithToken('/api/admin/record/' + id + '/download_certificate', (name || '人员') + '合格证.jpg', false);
+  };
+  window.mobileAdminIssueCertificate = async function (id) {
+    try {
+      var result = await requestSettings('/api/admin/record/' + id + '/issue_certificate', { method: 'POST', headers: authHeaders() });
+      setSettingsMessage(result.message || '合格证已签发', false);
+      if (typeof window.loadRecords === 'function') window.loadRecords(); else render();
+    } catch (error) {
+      if (typeof window.showAlert === 'function') window.showAlert('error', error.message || '签发失败');
+    }
+  };
   window.mobileAdminPendingSearch = function (value, event) { if (state.composing.pending || (event && event.isComposing)) return; state.pendingQuery = value; render(); };
   window.mobileAdminTogglePendingCompany = function (event) { if (event) event.stopPropagation(); state.pendingCompanyOpen = !state.pendingCompanyOpen; state.recordCompanyOpen = false; state.examCompanyOpen = false; render(); };
   window.mobileAdminSelectPendingCompany = function (company) { state.pendingCompany = company || ''; state.pendingCompanyOpen = false; render(); };
@@ -555,6 +576,15 @@
     } catch (error) { setSettingsMessage(error.message || '读取二级管理员失败', true); state.settings.admins = []; }
     if (isMobile() && state.tab === 'settings') render();
   }
+  async function loadProfileName() {
+    if (state.settings.profileLoaded) return;
+    try {
+      var result = await requestSettings('/api/user/status', { headers: authHeaders() });
+      state.settings.profileName = (result.data && result.data.real_name) || '';
+      state.settings.profileLoaded = true;
+    } catch (error) { setSettingsMessage(error.message || '读取管理员姓名失败', true); }
+    if (isMobile() && state.tab === 'settings' && state.settingsView === 'password') render();
+  }
   window.mobileAdminOpenSettings = function (view) {
     state.settingsView = view;
     state.settings.notice = '';
@@ -564,6 +594,7 @@
     if (view === 'units' && typeof window.loadCompanies === 'function') Promise.resolve(window.loadCompanies()).then(function () { if (isMobile() && state.tab === 'settings') render(); });
     if (view === 'bank') { state.settings.subjects = null; loadSettingsSubjects(); }
     if (view === 'admins') { state.settings.admins = null; state.settings.adminEditor = null; loadSettingsAdmins(); }
+    if (view === 'password') loadProfileName();
     if (view === 'cleanup') { state.settings.cleanupPreview = null; state.settings.cleanupResult = null; }
     render();
   };
@@ -751,6 +782,19 @@
       render();
       setTimeout(function () { if (typeof window.logout === 'function') window.logout(); }, 1200);
     } catch (error) { setSettingsMessage(error.message || '修改密码失败', true); render(); }
+  };
+  window.mobileAdminSaveProfileName = async function () {
+    var input = document.getElementById('mobile-profile-name');
+    var name = input ? input.value.trim() : '';
+    if (!name) { setSettingsMessage('请填写签发姓名', true); render(); return; }
+    try {
+      var formData = new FormData(); formData.append('real_name', name);
+      var result = await requestSettings('/api/admin/profile/name', { method: 'POST', headers: authHeaders(), body: formData });
+      state.settings.profileName = name;
+      state.settings.profileLoaded = true;
+      setSettingsMessage(result.message || '姓名已保存', false);
+    } catch (error) { setSettingsMessage(error.message || '姓名保存失败', true); }
+    render();
   };
   window.mobileAdminSetUserStatus = async function (id, status) {
     var action = status === 'disabled' ? '停用' : '启用';
