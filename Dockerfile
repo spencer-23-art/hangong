@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender1 \
     fonts-noto-cjk \
+    libreoffice-writer \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 

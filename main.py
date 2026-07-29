@@ -34,6 +34,8 @@ import uuid
 import time
 import zipfile
 import urllib.parse
+import subprocess
+import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
@@ -44,6 +46,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import openpyxl
 import csv
 from PIL import Image, ImageDraw, ImageFont
+from docx import Document
+from docx.shared import Cm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.lib.pagesizes import A4
@@ -92,107 +96,203 @@ def _safe_photo_paths(value):
     except Exception:
         return []
 
-def _draw_photo(canvas_obj, path, x, y, width, height):
-    if path and os.path.exists(path):
+def _row_value(row, key, default=''):
+    try:
+        value = row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+    return default if value is None else value
+
+def _iter_template_paragraphs(document):
+    for paragraph in document.paragraphs:
+        yield paragraph
+    seen_cells = set()
+    for table in document.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                cell_key = id(cell._tc)
+                if cell_key in seen_cells:
+                    continue
+                seen_cells.add(cell_key)
+                for paragraph in cell.paragraphs:
+                    yield paragraph
+
+def _replace_text_placeholder(paragraph, placeholder, value):
+    if placeholder not in paragraph.text:
+        return False
+    replacement = str(value or '')
+    for run in paragraph.runs:
+        if placeholder in run.text:
+            run.text = run.text.replace(placeholder, replacement)
+            return True
+    # A Word placeholder can be split into several runs; consolidate it in the first run.
+    full_text = paragraph.text.replace(placeholder, replacement)
+    if paragraph.runs:
+        paragraph.runs[0].text = full_text
+        for run in paragraph.runs[1:]:
+            run.text = ''
+    else:
+        paragraph.add_run(full_text)
+    return True
+
+def _replace_image_placeholder(paragraph, placeholder, image_path, width_cm):
+    if placeholder not in paragraph.text:
+        return False
+    if not image_path or not os.path.exists(image_path):
+        return _replace_text_placeholder(paragraph, placeholder, '')
+    if paragraph.text.strip() == placeholder:
+        for run in paragraph.runs:
+            run.text = ''
+        paragraph.add_run().add_picture(image_path, width=Cm(width_cm))
+        return True
+    return _replace_text_placeholder(paragraph, placeholder, '')
+
+def _build_photo_sheet(paths, work_dir, name):
+    images = []
+    for path in paths:
+        if not path or not os.path.exists(path):
+            continue
         try:
-            canvas_obj.drawImage(ImageReader(path), x, y, width=width, height=height, preserveAspectRatio=True, anchor='c', mask='auto')
-            return
+            with Image.open(path) as source:
+                images.append(source.convert('RGB').copy())
         except Exception:
-            pass
-    canvas_obj.rect(x, y, width, height)
-    canvas_obj.drawCentredString(x + width / 2, y + height / 2, '暂无图片')
+            continue
+    if not images:
+        return ''
+    images = images[:6]
+    columns = min(3, len(images))
+    rows = (len(images) + columns - 1) // columns
+    cell_width, cell_height = 420, 300
+    sheet = Image.new('RGB', (columns * cell_width, rows * cell_height), 'white')
+    for index, image in enumerate(images):
+        image.thumbnail((cell_width - 12, cell_height - 12), Image.Resampling.LANCZOS)
+        x = (index % columns) * cell_width + (cell_width - image.width) // 2
+        y = (index // columns) * cell_height + (cell_height - image.height) // 2
+        sheet.paste(image, (x, y))
+    path = os.path.join(work_dir, f"{name}.jpg")
+    sheet.save(path, 'JPEG', quality=90)
+    return path
+
+def _convert_docx_to_pdf(source_docx, output_dir):
+    profile_dir = os.path.join(output_dir, 'libreoffice-profile')
+    os.makedirs(profile_dir, exist_ok=True)
+    subprocess.run([
+        'soffice', '--headless', f'-env:UserInstallation=file://{profile_dir}',
+        '--convert-to', 'pdf:writer_pdf_Export', '--outdir', output_dir, source_docx
+    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=90)
+    output_pdf = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(source_docx))[0]}.pdf")
+    if not os.path.exists(output_pdf) or os.path.getsize(output_pdf) == 0:
+        raise RuntimeError('模板转换 PDF 失败')
+    return output_pdf
+
+def _fill_template(template_path, output_docx, text_values, image_values):
+    if not os.path.exists(template_path):
+        raise FileNotFoundError(f'未找到模板：{os.path.basename(template_path)}')
+    document = Document(template_path)
+    paragraphs = list(_iter_template_paragraphs(document))
+    found = set()
+    for placeholder, value in text_values.items():
+        for paragraph in paragraphs:
+            if _replace_text_placeholder(paragraph, placeholder, value):
+                found.add(placeholder)
+    for placeholder, (image_path, width_cm) in image_values.items():
+        for paragraph in paragraphs:
+            if _replace_image_placeholder(paragraph, placeholder, image_path, width_cm):
+                found.add(placeholder)
+    required = set(text_values) | set(image_values)
+    missing = required - found
+    if missing:
+        raise ValueError(f"模板缺少占位符：{', '.join(sorted(missing))}")
+    document.save(output_docx)
+
+def _exam_conclusion(exam):
+    if not exam:
+        return ''
+    if _row_value(exam, 'result') != 'qualified':
+        return '考试不合格'
+    ndt_status = _row_value(exam, 'ndt_status')
+    if ndt_status == 'qualified':
+        return '考试、探伤合格'
+    if ndt_status == 'unqualified':
+        return '考试合格，探伤不合格'
+    if ndt_status == 'not_required':
+        return '考试合格，无需探伤'
+    return '考试合格，待探伤'
+
+def _information_card_values(record, exam, work_dir):
+    groups = _parse_site_photo_paths(_row_value(record, 'site_photo_paths', ''))
+    exam_photos = _safe_photo_paths(_row_value(exam, 'photo_paths', '')) if exam else []
+    ndt_photos = _safe_photo_paths(_row_value(exam, 'ndt_photo_paths', '')) if exam else []
+    ndt_status = _row_value(exam, 'ndt_status') if exam else ''
+    result = _row_value(exam, 'result') if exam else ''
+    exam_time = (_row_value(exam, 'created_at') if exam else _row_value(record, 'created_at')) or ''
+    certificate_path = _row_value(record, 'certificate_path')
+    text_values = {
+        '<xm>': _row_value(record, 'name'),
+        '<hgh>': _row_value(record, 'welder_code'),
+        '<xmmc>': _row_value(record, 'exam_project'),
+        '<dw>': _row_value(record, 'company'),
+        '<qy>': _row_value(record, 'region_auth'),
+        '<sfz>': _row_value(record, 'id_card'),
+        '<sj>': str(exam_time)[:10],
+        '<ksxm>': _row_value(record, 'exam_project'),
+        '<zjzyx>': _row_value(record, 'certificate_work_item'),
+        '<hgl>': '合格' if result == 'qualified' else ('不合格' if result == 'unqualified' else ''),
+        '<qx>': _row_value(exam, 'defect_issues') if exam else '',
+        '<bk>': '是' if exam and int(_row_value(exam, 'attempt_number', 0)) > 1 else '否',
+        '<ts>': '是' if exam and bool(_row_value(exam, 'ndt_required')) else '否',
+        '<jg>': '合格' if ndt_status == 'qualified' else ('不合格' if ndt_status == 'unqualified' else ''),
+        '<jl>': _exam_conclusion(exam),
+    }
+    image_values = {
+        '<dtz>': (_row_value(record, 'photo_path'), 3.0),
+        '<hgz>': (_build_photo_sheet(groups.get('1', []), work_dir, 'welder_certificate'), 5.3),
+        '<tzryzyz>': (_build_photo_sheet(groups.get('2', []), work_dir, 'special_operation_certificate'), 5.3),
+        '<hjks>': (_build_photo_sheet(exam_photos, work_dir, 'welding_exam'), 12.5),
+        '<tszp>': (_build_photo_sheet(ndt_photos, work_dir, 'ndt'), 12.5),
+        '<hgk>': (certificate_path if certificate_path and os.path.exists(certificate_path) else '', 14.0),
+    }
+    return text_values, image_values
 
 def generate_information_card_pdf(record, exam):
-    """Use the supplied 信息卡 template's fields to generate a portable PDF information card."""
-    if not os.path.exists(INFO_CARD_TEMPLATE):
-        raise FileNotFoundError('未找到信息卡.docx 模板')
-    try:
-        pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
-    except Exception:
-        pass
+    """Fill only the supplied information-card placeholders, then preserve its layout as PDF."""
+    work_dir = tempfile.mkdtemp(prefix='info_card_', dir=CARDS_DIR)
     output_path = os.path.join(CARDS_DIR, f"info_{record['id']}_{uuid.uuid4().hex}.pdf")
-    page_w, page_h = A4
-    pdf = canvas.Canvas(output_path, pagesize=A4)
-    pdf.setTitle('焊工信息登记卡')
-    pdf.setFont('STSong-Light', 16)
-    pdf.drawCentredString(page_w / 2, page_h - 36, '焊工信息登记卡')
-    pdf.setFont('STSong-Light', 9)
-    exam_time = (exam['created_at'] if exam else record['created_at']) or ''
-    fields = [
-        ('焊工姓名', record['name']), ('焊工编号', record['welder_code']),
-        ('项目名称', record['exam_project']), ('施工单位', record['company']),
-        ('施工区域', record['region_auth']), ('身份证号', record['id_card']),
-        ('班组', record['team']), ('考试时间', exam_time[:10]),
-        ('考试项目', record['exam_project']), ('证件作业项', record['certificate_work_item']),
-        ('证件有效期', record['certificate_expiry']),
-        ('考试结果', '未考试' if not exam else ('合格' if exam['result'] == 'qualified' else '不合格')),
-        ('是否补考', '是' if exam and exam['attempt_number'] > 1 else '否'),
-        ('是否探伤', '--' if not exam else ('需要探伤' if exam['ndt_required'] else '无需探伤')),
-        ('探伤结果', '--' if not exam else ({'qualified':'合格','unqualified':'不合格','pending':'待探伤','not_required':'无需探伤'}.get(exam['ndt_status'], '--'))),
-        ('缺陷问题', '' if not exam else (exam['defect_issues'] or '--')),
-    ]
-    x, y, row_h, label_w, value_w = 36, page_h - 72, 25, 65, 196
-    for index, (label, value) in enumerate(fields):
-        col = index % 2
-        row = index // 2
-        px, py = x + col * (label_w + value_w), y - row * row_h
-        pdf.rect(px, py - row_h, label_w, row_h)
-        pdf.rect(px + label_w, py - row_h, value_w, row_h)
-        pdf.drawString(px + 5, py - 16, label)
-        pdf.drawString(px + label_w + 5, py - 16, str(value or '--')[:42])
-    photo_top = y - ((len(fields) + 1) // 2) * row_h - 16
-    pdf.setFont('STSong-Light', 10)
-    pdf.drawString(36, photo_top, '大头像')
-    _draw_photo(pdf, record['photo_path'], 36, photo_top - 110, 94, 94)
-    groups = _parse_site_photo_paths(record['site_photo_paths'])
-    exam_photos = _safe_photo_paths(exam['photo_paths']) if exam else []
-    ndt_photos = _safe_photo_paths(exam['ndt_photo_paths']) if exam else []
-    galleries = [('焊工上岗证', groups.get('1', [])), ('特种作业证', groups.get('2', [])), ('技能考试', exam_photos), ('探伤照片', ndt_photos)]
-    for i, (title, paths) in enumerate(galleries):
-        gx = 148 + i * 102
-        pdf.drawString(gx, photo_top, title)
-        _draw_photo(pdf, paths[0] if paths else '', gx, photo_top - 110, 90, 94)
-    pdf.setFont('STSong-Light', 8)
-    pdf.drawString(36, 28, '本信息卡依据录入资料、证件照片、焊接技能考试及探伤记录自动生成。')
-    pdf.save()
-    return output_path
-
-def _certificate_font(size):
-    for path in ('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', 'C:/Windows/Fonts/msyh.ttc'):
-        if os.path.exists(path):
-            return ImageFont.truetype(path, size)
-    return ImageFont.load_default()
+    try:
+        docx_path = os.path.join(work_dir, 'information_card.docx')
+        text_values, image_values = _information_card_values(record, exam, work_dir)
+        _fill_template(INFO_CARD_TEMPLATE, docx_path, text_values, image_values)
+        shutil.copyfile(_convert_docx_to_pdf(docx_path, work_dir), output_path)
+        return output_path
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
 
 def generate_qualification_certificate(record, exam, issuer_name):
-    """Create the supplied 合格证 template's content as a 8.56cm × 5.4cm JPG."""
-    if not os.path.exists(CERTIFICATE_TEMPLATE):
-        raise FileNotFoundError('未找到合格证.docx 模板')
-    width, height = 506, 319  # 8.56cm × 5.4cm at 150dpi
-    image = Image.new('RGB', (width, height), '#fffdf5')
-    draw = ImageDraw.Draw(image)
-    title_font, body_font, small_font = _certificate_font(23), _certificate_font(15), _certificate_font(12)
-    draw.rectangle((3, 3, width - 4, height - 4), outline='#b78b34', width=3)
-    draw.text((150, 18), '焊工技能验证合格证', font=title_font, fill='#7b5213')
-    rows = [
-        ('姓名：', record['name'], '焊工号：', record['welder_code']),
-        ('施工单位：', record['company'], '', ''),
-        ('项目名称：', record['exam_project'], '', ''),
-        ('考试项目：', record['exam_project'], '', ''),
-        ('证件作业项：', record['certificate_work_item'], '', ''),
-        ('批准人：', issuer_name, '签发时间：', datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d')),
-    ]
-    top, line_h = 63, 35
-    for i, (l1, v1, l2, v2) in enumerate(rows):
-        y = top + i * line_h
-        draw.line((20, y + 27, width - 20, y + 27), fill='#c9b27b', width=1)
-        draw.text((28, y), l1, font=body_font, fill='#3f2c0e')
-        draw.text((90, y), str(v1 or '--')[:22], font=body_font, fill='#1f2937')
-        if l2:
-            draw.text((282, y), l2, font=body_font, fill='#3f2c0e')
-            draw.text((365, y), str(v2 or '--')[:13], font=small_font, fill='#1f2937')
-    path = os.path.join(CARDS_DIR, f"certificate_{record['id']}_{uuid.uuid4().hex}.jpg")
-    image.save(path, 'JPEG', quality=95, dpi=(150, 150))
-    return path
+    """Fill the supplied certificate placeholders and render the unchanged template as JPG."""
+    work_dir = tempfile.mkdtemp(prefix='qualification_certificate_', dir=CARDS_DIR)
+    output_path = os.path.join(CARDS_DIR, f"certificate_{record['id']}_{uuid.uuid4().hex}.jpg")
+    try:
+        docx_path = os.path.join(work_dir, 'qualification_certificate.docx')
+        _fill_template(CERTIFICATE_TEMPLATE, docx_path, {
+            '<xm>': _row_value(record, 'name'),
+            '<hgh>': _row_value(record, 'welder_code'),
+            '<dw>': _row_value(record, 'company'),
+            '<xmmc>': _row_value(record, 'exam_project'),
+            '<ksxm>': _row_value(record, 'exam_project'),
+            '<zjzyx>': _row_value(record, 'certificate_work_item'),
+            '<pzr>': issuer_name,
+        }, {
+            '<dtz>': (_row_value(record, 'photo_path'), 2.2),
+        })
+        pdf_path = _convert_docx_to_pdf(docx_path, work_dir)
+        image_base = os.path.join(work_dir, 'qualification_certificate')
+        subprocess.run(['pdftoppm', '-f', '1', '-l', '1', '-r', '150', '-jpeg', '-singlefile', pdf_path, image_base], check=True, timeout=60)
+        rendered_jpg = f'{image_base}.jpg'
+        with Image.open(rendered_jpg) as image:
+            image.convert('RGB').resize((506, 319), Image.Resampling.LANCZOS).save(output_path, 'JPEG', quality=95, dpi=(150, 150))
+        return output_path
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
 
 # 默认考试科目（供首次初始化及回退使用）。R3：原本在 5 处重复，现统一为常量。
 DEFAULT_EXAM_SUBJECTS = [
