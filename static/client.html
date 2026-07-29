@@ -240,6 +240,11 @@
       #tab-content-history button, #tab-content-restore button {
         width: 100% !important;
       }
+      #tab-content-history > .glass-container { padding: 12px !important; }
+      #tab-content-history > .glass-container h2 { margin-bottom: 3px; font-size: 1.08rem; }
+      #tab-content-history > .glass-container .subtitle { margin: 0 0 8px; font-size: .74rem; line-height: 1.3; }
+      #tab-content-history > .glass-container > div[style*="display: flex"] { margin-bottom: 9px !important; gap: 5px !important; }
+      #tab-content-history > .glass-container > div[style*="display: flex"] button { min-height: 32px; padding: 6px 9px !important; font-size: .76rem; }
 
       /* 彻底隐藏表格头部 */
       .table-wrapper table thead {
@@ -260,16 +265,16 @@
       .table-wrapper tbody {
         display: flex !important;
         flex-direction: column;
-        gap: 10px;
+        gap: 6px;
       }
       .table-wrapper tr {
         display: block !important;
         background: rgba(255, 255, 255, 0.02) !important;
         border: 1px solid var(--glass-border) !important;
-        border-radius: 12px !important;
-        padding: 12px !important;
+        border-radius: 9px !important;
+        padding: 8px !important;
         margin-bottom: 0 !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 7px rgba(0, 0, 0, 0.1);
         position: relative !important;
         overflow: hidden;
       }
@@ -280,7 +285,7 @@
       .table-wrapper td {
         display: block !important;
         border: none !important;
-        padding: 3px 0 !important;
+        padding: 2px 0 !important;
         text-align: left !important;
         white-space: normal !important;
         font-size: 0.85rem !important;
@@ -292,7 +297,7 @@
         position: static;
         width: 100% !important;
         height: auto !important;
-        padding: 0 0 10px !important;
+        padding: 0 0 5px !important;
         display: block !important;
         background: transparent !important;
       }
@@ -324,8 +329,8 @@
         display: block !important;
         width: 100% !important;
         border-top: 1px dashed rgba(255, 255, 255, 0.08) !important;
-        margin-top: 8px;
-        padding-top: 12px !important;
+        margin-top: 5px;
+        padding-top: 7px !important;
         text-align: left !important;
       }
       #history-table-body td:last-child div {
@@ -337,22 +342,22 @@
         text-align: center;
       }
       #history-table-body td:last-child .history-record-actions { justify-content: center !important; }
-      #history-table-body td:last-child .history-card-action-button { flex: 0 0 auto !important; width: 76px !important; }
+      #history-table-body td:last-child .history-card-action-button { flex: 0 0 auto !important; width: 67px !important; min-width: 0 !important; padding: 4px 6px !important; font-size: .72rem !important; }
       #history-table-body td.history-select-cell {
         display: inline-block !important;
         width: auto !important;
-        margin-bottom: 7px;
+        margin-bottom: 4px;
         padding: 0 !important;
       }
-      .history-checkbox { width: 20px !important; height: 20px !important; }
-      .history-photo-gallery { min-width: 0; gap: 5px; }
-      .history-photo-item { padding: 4px; }
-      .history-photo-label { font-size: 0.65rem; margin-bottom: 3px; }
-      .history-photo-images { gap: 3px; }
-      .history-photo-empty { min-height: 52px; font-size: 0.62rem; }
-      .history-details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; gap: 5px 9px; }
-      .history-info-item { gap: 3px; font-size: 0.73rem; }
-      .history-info-name { font-size: 0.82rem; }
+      .history-checkbox { width: 18px !important; height: 18px !important; }
+      .history-photo-gallery { min-width: 0; gap: 3px; }
+      .history-photo-item { padding: 2px; border-radius: 5px; }
+      .history-photo-label { font-size: 0.58rem; margin-bottom: 2px; line-height: 1.1; }
+      .history-photo-images { gap: 2px; }
+      .history-photo-empty { min-height: 40px; font-size: 0.56rem; }
+      .history-details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; gap: 3px 6px; }
+      .history-info-item { gap: 2px; font-size: 0.67rem; line-height: 1.1; }
+      .history-info-name { font-size: 0.76rem; }
       .history-info-id, .history-info-address { grid-column: 1 / -1; }
       #restore-table-body td:nth-child(3) {
         padding-right: 66px !important;
