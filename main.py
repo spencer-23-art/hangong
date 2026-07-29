@@ -219,6 +219,8 @@ def _fill_template(template_path, output_docx, text_values, image_values, trim_t
         # renders it as a blank second page, so remove it from the generated copy only.
         body = document._element.body
         for element in reversed(list(body)):
+            if element.tag == qn('w:sectPr'):
+                continue
             if element.tag == qn('w:p') and not ''.join(element.itertext()).strip():
                 body.remove(element)
                 continue
