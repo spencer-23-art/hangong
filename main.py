@@ -261,7 +261,8 @@ def _information_card_values(record, exam, work_dir):
         '<tzryzyz>': (_build_photo_sheet(groups.get('2', []), work_dir, 'special_operation_certificate'), 5.3),
         '<hjks>': (_build_photo_sheet(exam_photos, work_dir, 'welding_exam'), 12.5),
         '<tszp>': (_build_photo_sheet(ndt_photos, work_dir, 'ndt'), 12.5),
-        '<hgk>': (certificate_path if certificate_path and os.path.exists(certificate_path) else '', 14.0),
+        # Keep the issued certificate inside the bottom <hgk> cell of the one-page information card.
+        '<hgk>': (certificate_path if certificate_path and os.path.exists(certificate_path) else '', 5.0),
     }
     return text_values, image_values
 
