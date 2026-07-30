@@ -83,6 +83,31 @@
       height: clamp(132px, 34vw, 220px);
       margin: 0;
     }
+    .photo-uploader { position: relative; }
+    .photo-source-menu {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 12;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px;
+      background: rgba(20, 24, 32, 0.94);
+      border-radius: 10px;
+      box-sizing: border-box;
+    }
+    .photo-source-menu.is-open { display: flex; }
+    .photo-source-menu button {
+      flex: 1;
+      min-height: 36px;
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 7px;
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      font-size: clamp(.68rem, 2.7vw, .86rem);
+      cursor: pointer;
+    }
     .multi-photo-preview {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -456,7 +481,7 @@
                 <button type="button" style="width: 100%; padding: 14px; background: transparent; border: none; color: #e0e0e0; font-size: 0.95rem; font-weight: 600; cursor: pointer; text-align: center;" onclick="hideIdCardChoice(); document.getElementById('idcard-album-input').click();">📂 从相册选择</button>
               </div>
             </div>
-            <input type="file" id="idcard-file-input" accept="image/*" style="display: none;" onchange="handleIdCardFile(event)">
+            <input type="file" id="idcard-file-input" accept="image/*" capture="environment" style="display: none;" onchange="handleIdCardFile(event)">
             <input type="file" id="idcard-album-input" accept="image/*" style="display: none;" onchange="handleIdCardFile(event)">
             
             <div id="idcard-preview-container" style="display: none; align-items: center; gap: 12px; padding: 10px; background: rgba(255,255,255,0.02); border: 1px dashed var(--glass-border); border-radius: 8px; width: 100%;">
@@ -469,8 +494,13 @@
         <!-- 第一行：主照片与两组现场照片 -->
         <div class="form-group">
           <div class="photo-uploader-row">
-            <div class="photo-uploader" onclick="document.getElementById('photo-input').click()">
-              <input type="file" id="photo-input" accept="image/*" capture="user" onchange="handlePhotoChange(event)">
+            <div class="photo-uploader" onclick="openPhotoSourceChoice(event, 'headshot')">
+              <input type="file" id="photo-input" accept="image/*" onchange="handlePhotoChange(event)">
+              <input type="file" id="photo-camera-input" accept="image/*" capture="user" onchange="handlePhotoChange(event)" style="display:none;">
+              <div class="photo-source-menu" id="photo-source-menu-headshot" onclick="event.stopPropagation()">
+                <button type="button" onclick="choosePhotoSource('headshot', 'camera')">📷 拍照</button>
+                <button type="button" onclick="choosePhotoSource('headshot', 'album')">📂 相册</button>
+              </div>
               <div class="photo-uploader-placeholder" id="uploader-placeholder">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -480,16 +510,26 @@
               </div>
               <img src="" id="photo-preview" class="photo-preview" style="display: none;">
             </div>
-            <div class="photo-uploader" onclick="document.getElementById('site-photo-input-1').click()">
-              <input type="file" id="site-photo-input-1" accept="image/*" capture="environment" multiple onchange="handleSitePhotos(event, 0)">
+            <div class="photo-uploader" onclick="openPhotoSourceChoice(event, 'welder-certificate')">
+              <input type="file" id="site-photo-input-1" accept="image/*" multiple onchange="handleSitePhotos(event, 0)">
+              <input type="file" id="site-photo-camera-input-1" accept="image/*" capture="environment" multiple onchange="handleSitePhotos(event, 0)" style="display:none;">
+              <div class="photo-source-menu" id="photo-source-menu-welder-certificate" onclick="event.stopPropagation()">
+                <button type="button" onclick="choosePhotoSource('welder-certificate', 'camera')">📷 拍照</button>
+                <button type="button" onclick="choosePhotoSource('welder-certificate', 'album')">📂 相册</button>
+              </div>
               <div class="photo-uploader-placeholder" id="site-photo-placeholder-1">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 <p>焊工证<br>可连续拍摄多张</p>
               </div>
               <div id="site-photo-preview-1" class="multi-photo-preview"></div>
             </div>
-            <div class="photo-uploader" onclick="document.getElementById('site-photo-input-2').click()">
-              <input type="file" id="site-photo-input-2" accept="image/*" capture="environment" multiple onchange="handleSitePhotos(event, 1)">
+            <div class="photo-uploader" onclick="openPhotoSourceChoice(event, 'special-certificate')">
+              <input type="file" id="site-photo-input-2" accept="image/*" multiple onchange="handleSitePhotos(event, 1)">
+              <input type="file" id="site-photo-camera-input-2" accept="image/*" capture="environment" multiple onchange="handleSitePhotos(event, 1)" style="display:none;">
+              <div class="photo-source-menu" id="photo-source-menu-special-certificate" onclick="event.stopPropagation()">
+                <button type="button" onclick="choosePhotoSource('special-certificate', 'camera')">📷 拍照</button>
+                <button type="button" onclick="choosePhotoSource('special-certificate', 'album')">📂 相册</button>
+              </div>
               <div class="photo-uploader-placeholder" id="site-photo-placeholder-2">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 <p>特种作业人员证<br>可连续拍摄多张</p>
@@ -1946,6 +1986,31 @@
       window.location.href = '/login';
     }
 
+    function closePhotoSourceChoices() {
+      document.querySelectorAll('.photo-source-menu.is-open').forEach(menu => menu.classList.remove('is-open'));
+    }
+
+    function openPhotoSourceChoice(event, photoType) {
+      if (event.target.closest('.multi-photo-remove')) return;
+      const menu = document.getElementById(`photo-source-menu-${photoType}`);
+      if (!menu) return;
+      const isOpen = menu.classList.contains('is-open');
+      closePhotoSourceChoices();
+      if (!isOpen) menu.classList.add('is-open');
+    }
+
+    function choosePhotoSource(photoType, source) {
+      const inputIds = {
+        headshot: { camera: 'photo-camera-input', album: 'photo-input' },
+        'welder-certificate': { camera: 'site-photo-camera-input-1', album: 'site-photo-input-1' },
+        'special-certificate': { camera: 'site-photo-camera-input-2', album: 'site-photo-input-2' }
+      };
+      const inputId = inputIds[photoType] && inputIds[photoType][source];
+      const input = inputId ? document.getElementById(inputId) : null;
+      closePhotoSourceChoices();
+      if (input) input.click();
+    }
+
     // 身份证拍照/选择：按钮下方弹出选择菜单
     function toggleIdCardChoice() {
       const popup = document.getElementById('idcard-choice-popup');
@@ -1959,6 +2024,7 @@
       if (popup && popup.style.display !== 'none' && !e.target.closest('#idcard-choice-popup') && !e.target.closest('[onclick*="toggleIdCardChoice"]')) {
         popup.style.display = 'none';
       }
+      if (!e.target.closest('.photo-uploader')) closePhotoSourceChoices();
     });
     // HTTP 环境下无法使用 getUserMedia，所有裁切由服务端完成
 
