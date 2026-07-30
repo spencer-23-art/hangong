@@ -557,9 +557,9 @@ def _parse_cleanup_dates(start_date: str, end_date: str):
 
 
 def _require_primary_admin(admin):
-    """Bulk deletion is intentionally limited to the primary administrator."""
+    """Destructive management actions are limited to the primary administrator."""
     if admin['username'] != 'admin':
-        raise HTTPException(status_code=403, detail="仅超级管理员可以清理资料")
+        raise HTTPException(status_code=403, detail="仅超级管理员可以执行删除操作")
 
 
 def _managed_upload_path(path: str):
@@ -1514,8 +1514,7 @@ def approve_user(user_id: int = Form(...), action: str = Form(...), admin = Depe
 # 删除注册用户（仅管理员，物理删除以防再度登录）
 @app.post("/api/admin/user/delete")
 def delete_user(user_id: int = Form(...), admin = Depends(get_admin_user)):
-    if admin['username'] == 'admin2':
-        raise HTTPException(status_code=403, detail="该账户无删除权限")
+    _require_primary_admin(admin)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -1575,8 +1574,7 @@ def set_user_status(
 # 删除培训人员记录（仅管理员，物理删除关联照片）
 @app.post("/api/admin/record/delete")
 def delete_record(record_id: int = Form(...), admin = Depends(get_admin_user)):
-    if admin['username'] == 'admin2':
-        raise HTTPException(status_code=403, detail="该账户无删除权限")
+    _require_primary_admin(admin)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -3043,6 +3041,7 @@ def get_restore_records(admin = Depends(get_admin_user)):
 # 删除门禁恢复申请记录（仅管理员）
 @app.post("/api/admin/delete_restore_gate")
 def delete_restore_gate(ids: str = Form(...), admin = Depends(get_admin_user)):
+    _require_primary_admin(admin)
     if not ids:
         raise HTTPException(status_code=400, detail="请选择需要删除的记录")
         
@@ -4023,6 +4022,7 @@ def add_exam_subject(name: str = Form(...), admin = Depends(get_admin_user)):
 # 删除考试科目（仅管理员）
 @app.post("/api/admin/delete_exam_subject")
 def delete_exam_subject(name: str = Form(...), admin = Depends(get_admin_user)):
+    _require_primary_admin(admin)
     name = name.strip()
     subjects = get_exam_subjects_list()
 

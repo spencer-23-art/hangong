@@ -244,6 +244,18 @@
       gap: 15px;
       font-size: 0.9rem;
     }
+    /* 仅超级管理员可见的删除类操作；服务端也会再次校验。 */
+    html:not(.is-primary-admin) button[onclick^="deleteRecord("],
+    html:not(.is-primary-admin) button[onclick^="handleDeleteUser("],
+    html:not(.is-primary-admin) button[onclick^="deleteRestoreGate("],
+    html:not(.is-primary-admin) button[onclick^="deleteExamSubject("],
+    html:not(.is-primary-admin) button[onclick^="deleteSubAdmin("],
+    html:not(.is-primary-admin) button[onclick^="mobileAdminDeleteExamSubject("],
+    html:not(.is-primary-admin) button[onclick^="mobileAdminDeleteSubAdmin("],
+    html:not(.is-primary-admin) button[onclick^="mobileAdminRemoveSettingsTag("],
+    html:not(.is-primary-admin) button[onclick^="mobileAdminRunCleanup("] {
+      display: none !important;
+    }
     .btn-logout {
       background: transparent;
       border: 1px solid var(--danger-color);
@@ -1358,6 +1370,7 @@
     }
 
     let currentAdminUsername = getSessionItem('username') || '';
+    document.documentElement.classList.toggle('is-primary-admin', currentAdminUsername === 'admin');
 
     // 初始化获取管理员详细信息，同步并校准本地 username 状态
     async function initAdminInfo() {
@@ -1368,6 +1381,7 @@
         const result = await response.json();
         if (response.ok && result.code === 200) {
           currentAdminUsername = result.data.username;
+          document.documentElement.classList.toggle('is-primary-admin', currentAdminUsername === 'admin');
           updateCurrentAdminDisplay(result.data.real_name);
           const nameInput = document.getElementById('cfg-admin-realname');
           if (nameInput) nameInput.value = result.data.real_name || '';
