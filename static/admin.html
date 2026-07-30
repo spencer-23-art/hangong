@@ -669,7 +669,7 @@
       </div>
     </div>
     <div class="sidebar-footer">
-      <div style="color: var(--text-muted); margin-bottom: 8px;">当前管理员：<strong>系统管理员</strong></div>
+      <div style="color: var(--text-muted); margin-bottom: 8px;">当前管理员：<strong id="sidebar-current-admin-name">系统管理员</strong></div>
       <button class="btn btn-danger" style="padding: 8px; font-size: 0.85rem;" onclick="logout()">退出后台</button>
     </div>
   </div>
@@ -705,7 +705,7 @@
     </div>
 
     <div class="user-info">
-      <span>当前管理员：<strong>系统管理员</strong></span>
+      <span>当前管理员：<strong id="header-current-admin-name">系统管理员</strong></span>
       <button class="btn-logout" onclick="logout()">退出后台</button>
     </div>
   </div>
@@ -1368,6 +1368,7 @@
         const result = await response.json();
         if (response.ok && result.code === 200) {
           currentAdminUsername = result.data.username;
+          updateCurrentAdminDisplay(result.data.real_name);
           const nameInput = document.getElementById('cfg-admin-realname');
           if (nameInput) nameInput.value = result.data.real_name || '';
           const storage = localStorage.getItem('token') ? localStorage : sessionStorage;
@@ -1377,6 +1378,14 @@
       } catch (err) {
         console.error('初始化管理员信息失败', err);
       }
+    }
+
+    function updateCurrentAdminDisplay(realName) {
+      const displayName = String(realName || '').trim() || (currentAdminUsername === 'admin2' ? '二级管理员' : (currentAdminUsername || '管理员'));
+      ['sidebar-current-admin-name', 'header-current-admin-name'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = displayName;
+      });
     }
 
     function updateAdminMenuTitle() {
@@ -4496,6 +4505,7 @@
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || result.code !== 200) throw new Error(result.detail || '姓名保存失败');
+        updateCurrentAdminDisplay(realName);
         showAlert('success', '姓名已保存，后续签发合格证将使用此姓名。');
       } catch (err) {
         alert(err.message || '姓名保存失败，请稍后重试。');
