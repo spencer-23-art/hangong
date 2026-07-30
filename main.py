@@ -1540,8 +1540,7 @@ def set_user_status(
     status: str = Form(...),
     admin = Depends(get_admin_user)
 ):
-    if admin['username'] == 'admin2':
-        raise HTTPException(status_code=403, detail="该账户无停用权限")
+    _require_primary_admin(admin)
     if status not in ('approved', 'disabled'):
         raise HTTPException(status_code=400, detail="不支持的账号状态")
 
@@ -1621,6 +1620,7 @@ def admin_update_user(
     password: str = Form(None),
     admin = Depends(get_admin_user)
 ):
+    _require_primary_admin(admin)
     username = username.strip()
     real_name = real_name.strip()
     company = company.strip()

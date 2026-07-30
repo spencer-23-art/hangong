@@ -247,6 +247,8 @@
     /* 仅超级管理员可见的删除类操作；服务端也会再次校验。 */
     html:not(.is-primary-admin) button[onclick^="deleteRecord("],
     html:not(.is-primary-admin) button[onclick^="handleDeleteUser("],
+    html:not(.is-primary-admin) button[onclick^="openEditUserModal("],
+    html:not(.is-primary-admin) button[onclick^="mobileAdminSetUserStatus("],
     html:not(.is-primary-admin) button[onclick^="deleteRestoreGate("],
     html:not(.is-primary-admin) button[onclick^="deleteExamSubject("],
     html:not(.is-primary-admin) button[onclick^="deleteSubAdmin("],
