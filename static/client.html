@@ -133,6 +133,8 @@
     .history-info-label { flex: 0 0 auto; color: var(--text-muted); }
     .history-info-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main); }
     .history-info-name { font-weight: 700; font-size: 0.84rem; }
+    .history-readonly-badge { flex: 0 0 auto; padding: 1px 4px; border-radius: 4px; color: #667085; background: #eef1f5; font-size: 0.62rem; line-height: 1.2; }
+    .history-readonly-note { color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; }
     .history-info-id { font-family: monospace; }
     .history-info-address { grid-column: 1 / -1; align-items: flex-start; }
     .history-info-address .history-info-value { white-space: normal; word-break: break-all; }
@@ -1256,6 +1258,9 @@
           tbody.innerHTML = '';
           historyData.forEach(row => {
             const tr = document.createElement('tr');
+            const isOwner = Number(row.is_owner) === 1;
+            const recorderName = escapeHtml(row.recorder_name || '');
+            const recordOwnershipLabel = isOwner ? '' : `<span class="history-readonly-badge">同单位只读${recorderName ? '·' + recorderName : ''}</span>`;
             let timeStr = row.created_at || '';
             if (timeStr) {
               timeStr = timeStr.replace('T', '<br>').substring(0, 23);
@@ -1270,7 +1275,7 @@
             const examResultText = row.latest_welding_exam_result === 'qualified' ? (row.latest_welding_ndt_status === 'pending' ? '合格·待探伤' : '合格') : (row.latest_welding_exam_result === 'unqualified' ? (Number(row.welding_exam_count) >= 2 ? '不合格' : '待补考') : '未考试');
             const ndtResultText = row.latest_welding_exam_result !== 'qualified' ? '--' : (row.latest_welding_ndt_status === 'qualified' ? '探伤合格' : (row.latest_welding_ndt_status === 'unqualified' ? '探伤不合格' : (row.latest_welding_ndt_status === 'pending' ? '待探伤' : '无需探伤')));
             let examAction;
-            if (row.latest_welding_exam_result === 'qualified' && row.latest_welding_ndt_status === 'pending') {
+            if (isOwner && row.latest_welding_exam_result === 'qualified' && row.latest_welding_ndt_status === 'pending') {
               examAction = `<button type="button" class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px;" onclick="startNdt(${row.id})">待探伤</button>`;
             } else if (row.latest_welding_exam_result === 'qualified') {
               examAction = `<button type="button" class="btn btn-success history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; opacity: 0.9; cursor: default;" disabled>合格</button>`;
@@ -1291,7 +1296,7 @@
               </td>
               <td colspan="2" class="history-details-cell">
                 <div class="history-details-grid">
-                  <div class="history-info-item"><span class="history-info-label">姓名</span><strong class="history-info-value history-info-name" title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</strong></div>
+                  <div class="history-info-item"><span class="history-info-label">姓名</span><strong class="history-info-value history-info-name" title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</strong>${recordOwnershipLabel}</div>
                   <div class="history-info-item"><span class="history-info-label">性别/年龄</span><span class="history-info-value">${escapeHtml(row.gender)} · ${row.age || 0}岁</span></div>
                   <div class="history-info-item"><span class="history-info-label">手机</span><span class="history-info-value" title="${escapeHtml(row.phone)}">${escapeHtml(row.phone)}</span></div>
                   <div class="history-info-item history-info-id"><span class="history-info-label">身份证</span><span class="history-info-value" title="${escapeHtml(row.id_card)}">${escapeHtml(row.id_card)}</span></div>
@@ -1313,10 +1318,10 @@
               </td>
               <td style="text-align: center; vertical-align: middle;">
                 <div class="history-record-actions" style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
-                  ${recordLocked ? `<button class="btn btn-secondary history-card-action-button" style="padding:5px 12px;font-size:.8rem;margin:0;width:auto;min-width:60px;opacity:.65;" disabled>已锁定</button>` : `<button class="btn btn-success history-card-action-button" style="padding:5px 12px;font-size:.8rem;margin:0;width:auto;min-width:60px;" onclick="editRecord(${row.id})">修改</button>`}
+                  ${isOwner ? (recordLocked ? `<button class="btn btn-secondary history-card-action-button" style="padding:5px 12px;font-size:.8rem;margin:0;width:auto;min-width:60px;opacity:.65;" disabled>已锁定</button>` : `<button class="btn btn-success history-card-action-button" style="padding:5px 12px;font-size:.8rem;margin:0;width:auto;min-width:60px;" onclick="editRecord(${row.id})">修改</button>`) : '<span class="history-readonly-note">仅查看</span>'}
                   <button class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; box-sizing: border-box;" onclick="downloadInfoCard(${row.id})">信息卡下载</button>
                   ${examAction}
-                  ${recordLocked ? (row.exit_date ? `<span class="history-exit-control"><span style="color:var(--text-muted);font-size:.76rem;">退场</span><strong style="font-size:.78rem;">${escapeHtml(row.exit_date)}</strong></span>` : `<span class="history-exit-control"><input id="exit-date-${row.id}" class="form-control history-exit-date" type="date"><button class="btn btn-danger history-card-action-button" style="padding:5px 9px;font-size:.76rem;margin:0;width:auto;min-width:48px;" onclick="setRecordExit(${row.id})">退场</button></span>`) : ''}
+                  ${isOwner && recordLocked ? (row.exit_date ? `<span class="history-exit-control"><span style="color:var(--text-muted);font-size:.76rem;">退场</span><strong style="font-size:.78rem;">${escapeHtml(row.exit_date)}</strong></span>` : `<span class="history-exit-control"><input id="exit-date-${row.id}" class="form-control history-exit-date" type="date"><button class="btn btn-danger history-card-action-button" style="padding:5px 9px;font-size:.76rem;margin:0;width:auto;min-width:48px;" onclick="setRecordExit(${row.id})">退场</button></span>`) : ''}
                 </div>
               </td>
             `;

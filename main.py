@@ -1372,6 +1372,7 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+
     cursor.execute("SELECT * FROM users WHERE username = ?", (username_clean,))
     user = cursor.fetchone()
 
@@ -1813,6 +1814,14 @@ def download_word(record_id: int, token: str = None, authorization: str = Header
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+    requester_company = ''
+    if user_info['role'] != 'admin':
+        cursor.execute("SELECT company FROM users WHERE id = ?", (user_info['id'],))
+        requester = cursor.fetchone()
+        requester_company = ((requester['company'] if requester else '') or '').strip()
+        if not requester_company:
+            conn.close()
+            raise HTTPException(status_code=403, detail="账号未设置单位，无法查看单位共享资料")
     
     if user_info['role'] == 'admin':
         cursor.execute("""
@@ -1826,8 +1835,9 @@ def download_word(record_id: int, token: str = None, authorization: str = Header
             SELECT r.*, COALESCE(NULLIF(r.company, ''), u.company, '') AS training_company
             FROM records r 
             LEFT JOIN users u ON r.user_id = u.id 
-            WHERE r.id = ? AND r.user_id = ?
-        """, (record_id, user_info['id']))
+            WHERE r.id = ?
+              AND COALESCE(NULLIF(TRIM(r.company), ''), u.company, '') = ?
+        """, (record_id, requester_company))
         
     row = cursor.fetchone()
     conn.close()
@@ -1893,10 +1903,23 @@ def download_info_card(record_id: int, token: str = None, authorization: str = H
         raise HTTPException(status_code=401, detail="请重新登录")
     with get_db() as conn:
         cursor = conn.cursor()
+        requester_company = ''
+        if user_info['role'] != 'admin':
+            cursor.execute("SELECT company FROM users WHERE id = ?", (user_info['id'],))
+            requester = cursor.fetchone()
+            requester_company = ((requester['company'] if requester else '') or '').strip()
+            if not requester_company:
+                raise HTTPException(status_code=403, detail="账号未设置单位，无法查看单位共享资料")
         if user_info['role'] == 'admin':
             cursor.execute("SELECT r.*, COALESCE(NULLIF(r.company, ''), u.company, '') AS company FROM records r LEFT JOIN users u ON r.user_id=u.id WHERE r.id=?", (record_id,))
         else:
-            cursor.execute("SELECT r.*, COALESCE(NULLIF(r.company, ''), u.company, '') AS company FROM records r LEFT JOIN users u ON r.user_id=u.id WHERE r.id=? AND r.user_id=?", (record_id, user_info['id']))
+            cursor.execute("""
+                SELECT r.*, COALESCE(NULLIF(r.company, ''), u.company, '') AS company
+                FROM records r
+                LEFT JOIN users u ON r.user_id = u.id
+                WHERE r.id = ?
+                  AND COALESCE(NULLIF(TRIM(r.company), ''), u.company, '') = ?
+            """, (record_id, requester_company))
         record = cursor.fetchone()
         if not record:
             raise HTTPException(status_code=404, detail="信息卡未找到或无权下载")
@@ -2046,26 +2069,29 @@ async def create_record(
             
     return {"code": 200, "message": "信息录入成功！"}
 
-# 获取当前用户录入的历史记录（默认最近10天，支持姓名搜索查全局，仅录入员自己）
+# 获取同一单位的历史记录。记录归属仍用于服务端写入权限校验。
 @app.get("/api/records")
 def get_user_records(name: str = None, current_user = Depends(get_current_user)):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    conditions = ["r.user_id = ?"]
-    params = [current_user['id']]
+    current_company = (current_user['company'] or '').strip()
+    if current_company:
+        # 兼容历史数据中 records.company 为空、仅 users.company 有值的情况。
+        conditions = ["COALESCE(NULLIF(TRIM(r.company), ''), u.company, '') = ?"]
+        params = [current_company]
+    else:
+        # 未设置单位的旧账号不能意外查看全部空单位记录，仍只显示自己的记录。
+        conditions = ["r.user_id = ?"]
+        params = [current_user['id']]
     
     if name and name.strip():
         conditions.append("r.name LIKE ?")
         params.append(f"%{name.strip()}%")
-    else:
-        ten_days_ago = (beijing_now() - timedelta(days=9)).strftime("%Y-%m-%d 00:00:00")
-        conditions.append("r.created_at >= ?")
-        params.append(ten_days_ago)
-        
     query = f'''
-    SELECT r.*,
+    SELECT r.*, u.real_name AS recorder_name,
+           CASE WHEN r.user_id = ? THEN 1 ELSE 0 END AS is_owner,
            (
              SELECT w.result
              FROM welding_skill_exams w
@@ -2086,10 +2112,11 @@ def get_user_records(name: str = None, current_user = Depends(get_current_user))
              WHERE w.record_id = r.id
            ) AS welding_exam_count
     FROM records r
+    LEFT JOIN users u ON r.user_id = u.id
     WHERE {" AND ".join(conditions)}
     ORDER BY r.created_at DESC
     '''
-    cursor.execute(query, params)
+    cursor.execute(query, [current_user['id'], *params])
     records = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return {"code": 200, "data": records}
