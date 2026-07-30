@@ -48,6 +48,7 @@
   };
 
   function isMobile() { return media.matches; }
+  function isPrimaryAdmin() { return typeof currentAdminUsername !== 'undefined' && currentAdminUsername === 'admin'; }
   function esc(value) {
     if (typeof window.escapeHtml === 'function') return window.escapeHtml(String(value == null ? '' : value));
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (m) {
@@ -300,8 +301,9 @@
     var start = config ? config.start_time : '--';
     var end = config ? config.end_time : '--';
     var regions = config && config.regions.length ? config.regions.join('、') : '未配置';
+    var primaryRows = isPrimaryAdmin() ? settingsRow('二级管理员', '账号、权限与状态', 'admins') + settingsRow('清理资料', '按日期清理录入档案与上传文件', 'cleanup') : '';
     return '<section class="tab-panel ' + (state.tab === 'settings' ? 'is-active' : '') + '" data-panel="settings">' +
-      settingsRow('系统配置', '考试 ' + start + ' – ' + end + ' · 区域 ' + regions, 'core') + settingsRow('培训单位', '查看当前单位与归属来源', 'units') + settingsRow('考试题库', '科目、题目、导入与更新', 'bank') + settingsRow('二级管理员', '账号、权限与状态', 'admins') + settingsRow('修改密码', '更新当前管理员密码', 'password') + settingsRow('清理资料', '按日期清理录入档案与上传文件', 'cleanup') + settingsLogoutRow() + settingsNotice() + '</section>';
+      settingsRow('系统配置', '考试 ' + start + ' – ' + end + ' · 区域 ' + regions, 'core') + settingsRow('培训单位', '查看当前单位与归属来源', 'units') + settingsRow('考试题库', '科目、题目、导入与更新', 'bank') + settingsRow('修改密码', '更新当前管理员密码', 'password') + primaryRows + settingsLogoutRow() + settingsNotice() + '</section>';
   }
   function settingsRow(title, detail, view) {
     return '<button class="settings-row" type="button" onclick="mobileAdminOpenSettings(\'' + view + '\')"><span class="settings-icon">' + icon('settings') + '</span><span class="settings-copy"><strong>' + title + '</strong><span>' + detail + '</span></span>' + icon('arrow') + '</button>';
@@ -604,6 +606,11 @@
     if (isMobile() && state.tab === 'settings' && state.settingsView === 'password') render();
   }
   window.mobileAdminOpenSettings = function (view) {
+    if (!isPrimaryAdmin() && (view === 'admins' || view === 'cleanup')) {
+      state.settingsView = 'home';
+      render();
+      return;
+    }
     state.settingsView = view;
     state.settings.notice = '';
     state.settings.error = '';
@@ -615,6 +622,10 @@
     if (view === 'password') loadProfileName();
     if (view === 'cleanup') { state.settings.cleanupPreview = null; state.settings.cleanupResult = null; }
     render();
+  };
+  window.mobileAdminRefreshPermissions = function () {
+    if (!isPrimaryAdmin() && (state.settingsView === 'admins' || state.settingsView === 'cleanup')) state.settingsView = 'home';
+    if (isMobile()) render();
   };
   window.mobileAdminSetCleanupDate = function (kind, value) {
     if (kind === 'start') state.settings.cleanupStart = value || '';

@@ -256,6 +256,11 @@
     html:not(.is-primary-admin) button[onclick^="mobileAdminRunCleanup("] {
       display: none !important;
     }
+    html:not(.is-primary-admin) #cfg-menu-cleanup,
+    html:not(.is-primary-admin) #cfg-panel-cleanup,
+    html:not(.is-primary-admin) #sub-admins-section {
+      display: none !important;
+    }
     .btn-logout {
       background: transparent;
       border: 1px solid var(--danger-color);
@@ -1388,6 +1393,7 @@
           const storage = localStorage.getItem('token') ? localStorage : sessionStorage;
           storage.setItem('username', currentAdminUsername);
           updateAdminMenuTitle();
+          if (typeof window.mobileAdminRefreshPermissions === 'function') window.mobileAdminRefreshPermissions();
         }
       } catch (err) {
         console.error('初始化管理员信息失败', err);
