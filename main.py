@@ -742,6 +742,120 @@ def safe_filename_part(s: str) -> str:
         return ""
     return "".join(c for c in str(s) if c not in _FILENAME_INVALID_CHARS)
 
+# 门禁/恢复导入表 CSV 的说明注释（无法读取 06.03.csv 模板时回退使用）。
+_GATE_CSV_DEFAULT_COMMENTS = [
+    "・ *号为必填项；,,,,,,,,,\n",
+    "・ 填写数字编码代替属性值；,,,,,,,,,\n",
+    "・ 使用EXCEL编辑导入文件时，请将单元格的格式修改为文本格式，避免数字文本自动转换为科学计数文本；,,,,,,,,,\n",
+    ",,,,,,,,,\n",
+    "1、姓名*：1～32个字符；不能包含 ' / \\: * ? \" < > | 这些特殊字符；,,,,,,,,,\n",
+    "2、性别*：1（男）、2（女）、0（未知）；,,,,,,,,,\n",
+    "3、组织路径*：填写从选择导入的组织名称开始，至目标组织的完整名称路径；,,,,,,,,,\n",
+    "4、证件类型*：111（身份证）、414（护照）、113（户口簿）、335（驾驶证）、131（工作证）、133（学生证）、114（军官证）、990（其他）；,,,,,,,,,\n",
+    "5、证件号码*：1~20个字符；只允许输入数字和字母；,,,,,,,,,\n",
+    "6、工号：1~32个字符；只允许输入数字、字母和汉字；,,,,,,,,,\n",
+    "7、手机号码：1-20位数字；,,,,,,,,,\n",
+    "8、拼音：人员姓名拼音；,,,,,,,,,\n",
+    "9、所属区域：0 ～128个字符；不能包含 ' / \\ : * ? \" < > | 这些特殊字符；,,,,,,,,,\n",
+    "10、卡号：8~20个字符；只允许输入数字和大写字母。,,,,,,,,,\n"
+]
+
+def _load_gate_csv_comments() -> list:
+    """优先读取 06.03.csv 模板首部说明注释，失败则使用默认注释。"""
+    template_path = '06.03.csv'
+    if os.path.exists(template_path):
+        try:
+            with open(template_path, 'r', encoding='gbk') as f:
+                lines = f.readlines()
+                for idx, line in enumerate(lines):
+                    if '*姓名' in line:
+                        return lines[:idx]
+        except Exception:
+            pass
+    return list(_GATE_CSV_DEFAULT_COMMENTS)
+
+def build_gate_csv(records) -> bytes:
+    """根据 records（sqlite Row 列表，需含 name/gender/company/region_auth/id_card/phone）
+    生成 GBK 编码的门禁导入表 CSV 字节，供下载接口复用。"""
+    csv_output = io.StringIO()
+    csv_output.write("".join(_load_gate_csv_comments()))
+    writer = csv.writer(csv_output)
+    writer.writerow(['*姓名', '*性别', '*组织路径', '*证件类型', '*证件号码', '工号', '手机号码', '拼音', '所属区域', '卡号'])
+    for r in records:
+        gender_code = '0'
+        if r['gender'] == '男':
+            gender_code = '1'
+        elif r['gender'] == '女':
+            gender_code = '2'
+        company = r['company'] if r['company'] else ""
+        region = r['region_auth'] if r['region_auth'] else ""
+        org_path = f"{company}/{region}" if region else company
+        writer.writerow([r['name'], gender_code, org_path, '111', r['id_card'], '', r['phone'], '', region, ''])
+    csv_data = csv_output.getvalue().encode('gbk', errors='ignore')
+    csv_output.close()
+    return csv_data
+
+def pack_photos_zip(records) -> bytes:
+    """根据 records（需含 photo_path/name/id_card）生成照片压缩包字节，自动处理文件名净化与重名。"""
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        added_filenames = set()
+        for r in records:
+            photo_path = r['photo_path']
+            if not photo_path or not os.path.exists(photo_path):
+                continue
+            file_ext = os.path.splitext(photo_path)[1] or '.jpg'
+            base_filename = f"{safe_filename_part(r['name'])}_{safe_filename_part(r['id_card'])}"
+            filename = f"{base_filename}{file_ext}"
+            counter = 1
+            while filename in added_filenames:
+                filename = f"{base_filename}_{counter}{file_ext}"
+                counter += 1
+            added_filenames.add(filename)
+            zip_file.write(photo_path, arcname=filename)
+    return zip_buffer.getvalue()
+
+def _csv_download_response(content: bytes, filename: str):
+    """生成带 UTF-8 文件名的 CSV 下载响应。"""
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename*=utf-8''{urllib.parse.quote(filename)}"}
+    )
+
+def _zip_download_response(content: bytes, filename: str):
+    """生成带 UTF-8 文件名的 ZIP 下载响应。"""
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename*=utf-8''{urllib.parse.quote(filename)}"}
+    )
+
+def parse_id_list(ids: str) -> list:
+    """把 "1,2,3" 解析为 [1,2,3]，校验非空。"""
+    if not ids:
+        raise HTTPException(status_code=400, detail="请选择需要下载的记录")
+    id_list = [int(x) for x in ids.split(',') if x.strip()]
+    if not id_list:
+        raise HTTPException(status_code=400, detail="没有勾选任何有效的人员记录")
+    return id_list
+
+def fetch_records_by_ids(cursor, id_list: list, gate_only: bool):
+    """按 id 列表查询 records（含 company），gate_only=True 时仅查门禁恢复待处理记录。
+    返回 (records, placeholders)。"""
+    placeholders = ','.join(['?'] * len(id_list))
+    where = f"r.id IN ({placeholders})"
+    if gate_only:
+        where += " AND r.gate_restore_status = 'pending'"
+    cursor.execute(f'''
+    SELECT r.*
+    FROM records r
+    WHERE {where}
+    ORDER BY r.is_gate_downloaded ASC, r.created_at DESC
+    ''', id_list)
+    return cursor.fetchall(), placeholders
+
+
 def get_latest_training_record(cursor, name: str, id_last6: str):
     """Return the newest training record for a verified person.
 
@@ -863,6 +977,27 @@ def init_db():
             ('admin2', encrypt_pwd('admin1234'), '普通管理员', '管理部', 'approved', 'admin')
         )
         
+    # 检测并为 records 表添加 is_gate_downloaded 列自愈逻辑
+    try:
+        cursor.execute("ALTER TABLE records ADD COLUMN is_gate_downloaded INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    # 检测并为 records 表添加 gate_restore_status 列自愈逻辑
+    try:
+        cursor.execute("ALTER TABLE records ADD COLUMN gate_restore_status TEXT DEFAULT NULL")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    # 检测并为 records 表添加 is_restore_downloaded 列自愈逻辑
+    try:
+        cursor.execute("ALTER TABLE records ADD COLUMN is_restore_downloaded INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
     # 检测并为 records 表添加 word_path 列自愈逻辑
     try:
         cursor.execute("ALTER TABLE records ADD COLUMN word_path TEXT DEFAULT NULL")
@@ -2509,7 +2644,7 @@ def get_companies():
     conn.close()
     return {"code": 200, "data": sorted_companies}
 
-# 查看所有已录入的信息（仅管理员，支持按日期区间和工作单位筛选）。
+# 查看所有已录入的信息（仅管理员，支持按日期区间筛选、工作单位筛选和门禁下载状态排序）
 @app.get("/api/admin/records")
 def get_all_records(start_date: str = None, end_date: str = None, company: str = None, name: str = None, page: int = 1, limit: int = 20, admin = Depends(get_admin_user)):
     conn = sqlite3.connect(DB_PATH)
@@ -2563,7 +2698,7 @@ def get_all_records(start_date: str = None, end_date: str = None, company: str =
         FROM records r 
         LEFT JOIN users u ON r.user_id = u.id 
         {where_clause}
-        ORDER BY r.created_at DESC
+        ORDER BY r.is_gate_downloaded ASC, r.created_at DESC
         LIMIT ? OFFSET ?
         '''
         offset = (page - 1) * limit
@@ -2577,7 +2712,7 @@ def get_all_records(start_date: str = None, end_date: str = None, company: str =
         FROM records r 
         LEFT JOIN users u ON r.user_id = u.id 
         {where_clause}
-        ORDER BY r.created_at DESC
+        ORDER BY r.is_gate_downloaded ASC, r.created_at DESC
         '''
         cursor.execute(query, params)
         
@@ -2590,6 +2725,64 @@ def get_all_records(start_date: str = None, end_date: str = None, company: str =
         "page": page,
         "limit": limit
     }
+
+# 门禁导出 - 仅 CSV 导入表 (并更新已下载状态)
+@app.get("/api/admin/export/gate/csv")
+def export_gate_csv(ids: str = None, admin = Depends(get_admin_user)):
+    id_list = parse_id_list(ids)
+    with get_db() as conn:
+        cursor = conn.cursor()
+        records, placeholders = fetch_records_by_ids(cursor, id_list, gate_only=False)
+        if not records:
+            raise HTTPException(status_code=404, detail="未找到对应的记录")
+        csv_data = build_gate_csv(records)
+        # 将门禁下载状态更新为已下载(1)
+        cursor.execute(f"UPDATE records SET is_gate_downloaded = 1 WHERE id IN ({placeholders})", id_list)
+        conn.commit()
+    return _csv_download_response(csv_data, "培训人员导入表.csv")
+
+# 门禁导出 - 仅照片压缩包
+@app.get("/api/admin/export/gate/photos")
+def export_gate_photos(ids: str = None, admin = Depends(get_admin_user)):
+    id_list = parse_id_list(ids)
+    with get_db() as conn:
+        cursor = conn.cursor()
+        records, _ = fetch_records_by_ids(cursor, id_list, gate_only=False)
+    if not records:
+        raise HTTPException(status_code=404, detail="未找到对应的记录")
+    return _zip_download_response(pack_photos_zip(records), "培训人员照片.zip")
+
+# 门禁下载旧版兼容接口 (CSV 导入表和照片打包，支持按 ids 筛选，并更新已下载状态)
+@app.get("/api/admin/export/gate")
+def export_gate_old_compatible(ids: str = None, admin = Depends(get_admin_user)):
+    id_list = parse_id_list(ids)
+    with get_db() as conn:
+        cursor = conn.cursor()
+        records, placeholders = fetch_records_by_ids(cursor, id_list, gate_only=False)
+        if not records:
+            raise HTTPException(status_code=404, detail="未找到对应的记录")
+        csv_data = build_gate_csv(records)
+        # CSV 导入表 + 照片合并打包
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("培训人员导入表.csv", csv_data)
+            added_filenames = set()
+            for r in records:
+                photo_path = r['photo_path']
+                if not photo_path or not os.path.exists(photo_path):
+                    continue
+                file_ext = os.path.splitext(photo_path)[1] or '.jpg'
+                base_filename = f"{safe_filename_part(r['name'])}_{safe_filename_part(r['id_card'])}"
+                filename = f"{base_filename}{file_ext}"
+                counter = 1
+                while filename in added_filenames:
+                    filename = f"{base_filename}_{counter}{file_ext}"
+                    counter += 1
+                added_filenames.add(filename)
+                zip_file.write(photo_path, arcname=filename)
+        cursor.execute(f"UPDATE records SET is_gate_downloaded = 1 WHERE id IN ({placeholders})", id_list)
+        conn.commit()
+    return _zip_download_response(zip_buffer.getvalue(), "门禁系统导入包.zip")
 
 # 导出并下载 Excel (按已有模板的格式，支持按 ids/日期区间 筛选)
 @app.get("/api/admin/export/excel")
@@ -2640,7 +2833,7 @@ def export_excel(ids: str = None, start_date: str = None, end_date: str = None, 
     FROM records r 
     LEFT JOIN users u ON r.user_id = u.id 
     {where_clause}
-    ORDER BY r.created_at DESC
+    ORDER BY r.is_gate_downloaded ASC, r.created_at DESC
     '''
     
     cursor.execute(query, params)
@@ -2714,6 +2907,162 @@ def export_excel(ids: str = None, start_date: str = None, end_date: str = None, 
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename*=utf-8''%E5%9F%B9%E8%AE%AD%E4%BA%BA%E5%91%98%E4%BF%A1%E6%81%AF%E8%A1%A8.xlsx"}
     )
+
+# 导出并下载 CSV (按已有模板的格式)
+@app.get("/api/admin/export/csv")
+def export_csv(admin = Depends(get_admin_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+        SELECT r.*
+        FROM records r
+        LEFT JOIN users u ON r.user_id = u.id
+        ORDER BY r.created_at DESC
+        ''')
+        records = cursor.fetchall()
+    return _csv_download_response(build_gate_csv(records), "培训人员导入表.csv")
+
+# 导出并下载照片压缩包（仅管理员）
+@app.get("/api/admin/export/photos")
+def export_photos(admin = Depends(get_admin_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT photo_path, name, id_card FROM records")
+        records = cursor.fetchall()
+    return _zip_download_response(pack_photos_zip(records), "培训人员照片.zip")
+
+# 获取同单位的所有人员记录（供客户端检索并用于门禁恢复）
+@app.get("/api/user/company_records")
+def get_company_records(name: str = None, current_user = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    query = '''
+    SELECT r.*, u.real_name as recorder_name
+    FROM records r
+    LEFT JOIN users u ON r.user_id = u.id
+    WHERE r.company = ? AND (r.gate_restore_status IS NULL OR r.gate_restore_status != 'pending')
+    '''
+    params = [current_user['company']]
+    
+    if name and name.strip():
+        query += " AND r.name LIKE ?"
+        params.append(f"%{name.strip()}%")
+        
+    query += " ORDER BY r.created_at DESC"
+    
+    cursor.execute(query, params)
+    records = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return {"code": 200, "data": records}
+
+# 提交门禁恢复申请（回复门禁）
+@app.post("/api/user/record/restore_gate")
+def restore_gate(ids: str = Form(...), current_user = Depends(get_current_user)):
+    if not ids:
+        raise HTTPException(status_code=400, detail="请选择需要恢复门禁的人员")
+        
+    id_list = [int(x) for x in ids.split(',') if x.strip()]
+    if not id_list:
+        raise HTTPException(status_code=400, detail="没有勾选任何有效的人员记录")
+        
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # 验证这些 records 都属于该用户所在的公司，防越权
+    placeholders = ','.join(['?'] * len(id_list))
+    check_query = f'''
+    SELECT r.id FROM records r
+    LEFT JOIN users u ON r.user_id = u.id
+    WHERE r.id IN ({placeholders}) AND r.company = ?
+    '''
+    cursor.execute(check_query, id_list + [current_user['company']])
+    allowed_ids = [row[0] for row in cursor.fetchall()]
+    
+    if len(allowed_ids) != len(id_list):
+        conn.close()
+        raise HTTPException(status_code=403, detail="部分记录不存在或无权操作")
+        
+    # 更新 records 的门禁恢复状态
+    update_query = f'''
+    UPDATE records
+    SET gate_restore_status = 'pending', is_restore_downloaded = 0
+    WHERE id IN ({placeholders})
+    '''
+    cursor.execute(update_query, id_list)
+    conn.commit()
+    conn.close()
+    return {"code": 200, "message": "门禁恢复申请提交成功"}
+
+# 查看所有提交了门禁恢复申请的人员记录（仅管理员）
+@app.get("/api/admin/restore_records")
+def get_restore_records(admin = Depends(get_admin_user)):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+    SELECT r.*, u.real_name as recorder_name
+    FROM records r
+    LEFT JOIN users u ON r.user_id = u.id
+    WHERE r.gate_restore_status = 'pending'
+    ORDER BY r.is_restore_downloaded ASC, r.created_at DESC
+    ''')
+    records = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return {"code": 200, "data": records}
+
+# 删除门禁恢复申请记录（仅管理员）
+@app.post("/api/admin/delete_restore_gate")
+def delete_restore_gate(ids: str = Form(...), admin = Depends(get_admin_user)):
+    if not ids:
+        raise HTTPException(status_code=400, detail="请选择需要删除的记录")
+        
+    id_list = [int(x) for x in ids.split(',') if x.strip()]
+    if not id_list:
+        raise HTTPException(status_code=400, detail="无有效记录ID")
+        
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    placeholders = ','.join(['?'] * len(id_list))
+    update_query = f'''
+    UPDATE records
+    SET gate_restore_status = NULL, is_restore_downloaded = 0
+    WHERE id IN ({placeholders})
+    '''
+    cursor.execute(update_query, id_list)
+    conn.commit()
+    conn.close()
+    return {"code": 200, "message": "门禁恢复记录删除成功"}
+
+
+# 门禁恢复导出 - 仅 CSV 导入表 (并更新 is_restore_downloaded)
+@app.get("/api/admin/export/restore/csv")
+def export_restore_csv(ids: str = None, admin = Depends(get_admin_user)):
+    id_list = parse_id_list(ids)
+    with get_db() as conn:
+        cursor = conn.cursor()
+        records, placeholders = fetch_records_by_ids(cursor, id_list, gate_only=True)
+        if not records:
+            raise HTTPException(status_code=404, detail="未找到对应的恢复申请记录")
+        csv_data = build_gate_csv(records)
+        # 将门禁恢复下载状态更新为已下载(1)
+        cursor.execute(f"UPDATE records SET is_restore_downloaded = 1 WHERE id IN ({placeholders})", id_list)
+        conn.commit()
+    return _csv_download_response(csv_data, "恢复人员导入表.csv")
+
+# 门禁恢复导出 - 仅照片压缩包
+@app.get("/api/admin/export/restore/photos")
+def export_restore_photos(ids: str = None, admin = Depends(get_admin_user)):
+    id_list = parse_id_list(ids)
+    with get_db() as conn:
+        cursor = conn.cursor()
+        records, _ = fetch_records_by_ids(cursor, id_list, gate_only=True)
+    if not records:
+        raise HTTPException(status_code=404, detail="未找到对应的记录")
+    return _zip_download_response(pack_photos_zip(records), "恢复人员照片.zip")
 
 # 题库上传更新
 @app.post("/api/admin/upload_exam_bank")
