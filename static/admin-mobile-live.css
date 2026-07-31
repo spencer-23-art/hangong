@@ -64,8 +64,7 @@
   #mobile-admin-live .person-line,
   #mobile-admin-live .card-footer,
   #mobile-admin-live .page-toolbar,
-  #mobile-admin-live .record-head,
-  #mobile-admin-live .exam-card-meta { display: flex; align-items: center; }
+  #mobile-admin-live .record-head { display: flex; align-items: center; }
 
   #mobile-admin-live .status-row { justify-content: space-between; font-size: .75rem; opacity: .9; }
   #mobile-admin-live .top-row { justify-content: space-between; margin-top: 13px; }
@@ -193,8 +192,7 @@
   #mobile-admin-live .record-photo-slot span { display:flex; align-items:center; justify-content:center; min-height:34px; color:var(--app-muted); font-size:.55rem; }
   #mobile-admin-live .card-footer { justify-content:space-between; gap:5px; }
   #mobile-admin-live .record-time { color:var(--app-muted); font-size:.61rem; }
-  #mobile-admin-live .small-action,
-  #mobile-admin-live .exam-detail-button { min-height:24px; padding:3px 6px; border:1px solid rgba(199,210,254,.26); border-radius:7px; color:#e0e7ff; background:rgba(79,70,229,.22); font-size:.63rem; }
+  #mobile-admin-live .small-action { min-height:24px; padding:3px 6px; border:1px solid rgba(199,210,254,.26); border-radius:7px; color:#e0e7ff; background:rgba(79,70,229,.22); font-size:.63rem; }
   #mobile-admin-live .mobile-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:3px; }
   #mobile-admin-live .warning-action { border-color:rgba(251,191,36,.3); color:#fef3c7; background:rgba(245,158,11,.17); }
   #mobile-admin-live .danger-action { border-color:rgba(248,113,113,.32); color:#fecaca; background:rgba(239,68,68,.18); }
@@ -209,27 +207,6 @@
   #mobile-admin-live .settings-summary-line { width:100%; border-right:0; border-bottom:0; border-left:0; color:var(--app-text); background:transparent; text-align:left; }
   #mobile-admin-live .settings-summary-line:first-of-type { border-top:0; }
   #mobile-admin-live .value-tag { padding:4px 8px; border:1px solid rgba(199,210,254,.24); border-radius:8px; color:#c7d2fe; background:rgba(79,70,229,.16); font-size:.72rem; }
-
-  #mobile-admin-live .exam-summary { display:grid; grid-template-columns:66px 1fr; gap:12px; align-items:center; }
-  #mobile-admin-live .score-ring { width:66px; height:66px; display:grid; place-items:center; border:7px solid var(--app-accent); border-left-color:var(--app-line); border-radius:50%; color:#c7d2fe; font-size:1rem; font-weight:650; }
-  #mobile-admin-live .exam-card.today { border-color:#818cf8; background:rgba(79,70,229,.18); }
-  #mobile-admin-live .exam-card.past { border-color:rgba(148,163,184,.26); background:rgba(71,85,105,.18); }
-  #mobile-admin-live .exam-card { padding:12px; }
-  #mobile-admin-live .exam-card-toggle { display:block; width:100%; padding:0; border:0; color:inherit; background:transparent; text-align:left; }
-  #mobile-admin-live .exam-result.high { color:#fff; background:#16a34a; }
-  #mobile-admin-live .exam-result.low { color:#fff; background:var(--app-danger); }
-  #mobile-admin-live .exam-card-meta { justify-content:space-between; gap:8px; margin-top:9px; padding-top:9px; border-top:1px solid var(--app-line); }
-  #mobile-admin-live .exam-card-meta > span { color:var(--app-muted); font-size:.77rem; }
-  #mobile-admin-live .exam-history { display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--app-line); }
-  #mobile-admin-live .exam-card.is-expanded .exam-history { display:grid; gap:8px; animation:live-panel-enter .18s ease both; }
-  #mobile-admin-live .exam-history-title { color:var(--app-muted); font-size:.76rem; }
-  #mobile-admin-live .exam-attempt { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; padding:9px 0; border-top:1px solid rgba(255,255,255,.1); }
-  #mobile-admin-live .exam-attempt:first-of-type { border-top:0; }
-  #mobile-admin-live .exam-attempt strong { display:block; font-size:.8rem; }
-  #mobile-admin-live .exam-attempt span { display:block; margin-top:3px; color:var(--app-muted); font-size:.73rem; }
-  #mobile-admin-live .exam-pass { color:#4ade80; }
-  #mobile-admin-live .exam-fail { color:#f87171; }
-  #mobile-admin-live .today-label { color:#c7d2fe !important; font-weight:650; }
 
   #mobile-admin-live .settings-row { display:flex; align-items:center; gap:12px; width:100%; margin-bottom:9px; padding:13px; color:var(--app-text); text-align:left; }
   #mobile-admin-live .settings-icon { width:36px; height:36px; display:grid; place-items:center; flex:0 0 auto; border-radius:12px; color:#c7d2fe; background:rgba(79,70,229,.22); }

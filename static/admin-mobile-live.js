@@ -13,21 +13,16 @@
   var bellHome = bell ? bell.parentNode : null;
   var bellNext = bell ? bell.nextSibling : null;
   var searchTimer = null;
-  var examSearchTimer = null;
-  var mobileExamRecords = [];
   var state = {
     tab: 'records',
     recordCompanyOpen: false,
     recordFiltersOpen: false,
     recordStatus: 'all',
     downloadOpen: false,
-    composing: { record: false, exam: false, pending: false },
+    composing: { record: false, pending: false },
     pendingQuery: '',
     pendingCompanyOpen: false,
     pendingCompany: '',
-    examCompanyOpen: false,
-    examFiltersOpen: false,
-    examHistoryId: null,
     settingsView: 'home',
     settings: {
       config: null,
@@ -65,7 +60,6 @@
       download: '<svg viewBox="0 0 24 24"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>',
       records: '<svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"></path><path d="M8 9h8M8 13h5"></path></svg>',
       users: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"></path><path d="M17 10a3 3 0 1 0-1.2-5.7M17 14c2.2.2 4 2.3 4 4.7"></path></svg>',
-      exam: '<svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h4"></path></svg>',
       settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.1 2.1-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-3v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1-2.1-2.1.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H5.3v-3h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 2.1-2.1.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h3v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 2.1 2.1-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2v3h-.2a1.7 1.7 0 0 0-1.5 1Z"></path></svg>',
       logout: '<svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5"></path><path d="M15 12H3"></path><path d="M21 19V5a2 2 0 0 0-2-2h-7"></path></svg>',
       arrow: '<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></svg>'
@@ -230,47 +224,6 @@
       '<div class="record-details"><div class="wide"><span>工作单位</span><strong>' + esc(u.company || '--') + '</strong></div><div><span>联系电话</span><strong>' + esc(u.phone || u.username || '--') + '</strong></div><div><span>注册时间</span><strong>' + esc(registrationTime) + '</strong></div></div>' +
       '<div class="card-footer"><span class="record-time">审批请点右上角铃铛</span><span class="mobile-actions"><button class="small-action" type="button" onclick="openEditUserModal(' + Number(u.id) + ',' + jsArg(u.username) + ',' + jsArg(u.real_name) + ',' + jsArg(u.company) + ')">编辑</button><button class="small-action warning-action" type="button" onclick="mobileAdminSetUserStatus(' + Number(u.id) + ',' + jsArg(toggleStatus) + ')">' + toggleLabel + '</button><button class="small-action danger-action" type="button" onclick="handleDeleteUser(' + Number(u.id) + ')">删除</button></span></div></article>';
   }
-  function examPanel() {
-    var company = '', subject = '', query = '';
-    try { company = document.getElementById('exam-filter-company').value || ''; } catch (e) { /* ignore */ }
-    try { subject = document.getElementById('exam-filter-type').value || ''; } catch (e) { /* ignore */ }
-    try { query = typeof examFilterName !== 'undefined' ? examFilterName : ''; } catch (e) { query = ''; }
-    var companies = [];
-    try { companies = typeof allCompanies !== 'undefined' && Array.isArray(allCompanies) ? allCompanies : []; } catch (e) { companies = []; }
-    var subjects = [];
-    var subjectSelect = document.getElementById('exam-filter-type');
-    if (subjectSelect) subjects = Array.prototype.map.call(subjectSelect.options, function (option) { return option.value; }).filter(Boolean);
-    var recordCount = mobileExamRecords.length;
-    var passCount = mobileExamRecords.filter(function (item) { return Number(item.score) >= 90; }).length;
-    var companyOptions = [''].concat(companies).map(function (item) { return '<button type="button" onclick="mobileAdminSelectExamCompany(' + jsArg(item) + ')">' + esc(item || '全部工作单位') + '</button>'; }).join('');
-    var subjectOptions = [''].concat(subjects).map(function (item) { return '<button type="button" class="filter-option ' + (subject === item ? 'is-selected' : '') + '" onclick="mobileAdminSelectExamSubject(' + jsArg(item) + ')">' + esc(item || '全部科目') + '</button>'; }).join('');
-    return '<section class="tab-panel ' + (state.tab === 'exam' ? 'is-active' : '') + '" data-panel="exam">' +
-      '<div class="sheet exam-summary"><div class="score-ring">' + (recordCount ? Math.round(passCount * 100 / recordCount) : 0) + '%</div><div><h3 class="sheet-title">考试信息</h3><div class="summary-note">共 ' + recordCount + ' 人，合格 ' + passCount + ' 人；成绩以最后一次考试为准。</div></div></div>' +
-      '<div class="page-toolbar"><div class="company-combobox"><span class="search-glyph">' + icon('search') + '</span><input type="search" value="' + esc(query) + '" placeholder="姓名、单位、身份证、手机号" oncompositionstart="mobileAdminCompositionStart(\'exam\')" oncompositionend="mobileAdminCompositionEnd(\'exam\',this.value)" oninput="mobileAdminExamSearch(this.value,event)"><button class="company-toggle" type="button" onclick="mobileAdminToggleExamCompany(event)">' + icon('down') + '</button><div class="company-options ' + (state.examCompanyOpen ? 'is-open' : '') + '">' + companyOptions + '</div></div><button class="toolbar-btn" type="button" aria-label="筛选考试信息" onclick="mobileAdminToggleExamFilters(event)">' + icon('filter') + '</button></div>' +
-      '<div class="filter-panel ' + (state.examFiltersOpen ? 'is-open' : '') + '"><div class="filter-group"><span class="filter-group-label">考试科目</span><div class="filter-options">' + subjectOptions + '</div></div><div class="filter-panel-actions"><button type="button" onclick="mobileAdminClearExamFilters()">重置</button><button type="button" class="apply-filter" onclick="mobileAdminToggleExamFilters()">完成</button></div></div>' +
-      '<div class="section-heading"><h3>' + esc(company || '全部工作单位') + '</h3><span>成绩为最后一次</span></div><div class="record-stack">' +
-      (mobileExamRecords.length ? mobileExamRecords.map(examCard).join('') : '<div class="empty-state">没有符合条件的考试记录</div>') + '</div>' + examPager() + '</section>';
-  }
-  function examCard(record) {
-    var pass = Number(record.score) >= 90;
-    var history = Array.isArray(record.history) ? record.history : [];
-    var multiple = history.length > 1;
-    var expanded = multiple && state.examHistoryId === record.id;
-    var today = isToday(record.created_at);
-    var historyHtml = multiple ? '<div class="exam-history"><div class="exam-history-title">历史考试记录（' + history.length + ' 次）</div>' + history.map(function (item, index) {
-      var itemPass = Number(item.score) >= 90;
-      return '<div class="exam-attempt"><div><strong>第 ' + (index + 1) + ' 次 · <span class="' + (itemPass ? 'exam-pass' : 'exam-fail') + '">' + esc(item.score) + ' 分</span></strong><span>' + esc(displayDateTime(item.created_at)) + ' · 用时 ' + esc(item.duration || '--') + '</span></div><button class="exam-detail-button" type="button" onclick="event.stopPropagation();viewExamDetail(' + Number(item.id) + ')">考试详情</button></div>';
-    }).join('') + '</div>' : '';
-    var toggle = multiple ? ' onclick="mobileAdminToggleExamHistory(' + Number(record.id) + ')"' : '';
-    return '<article class="record-card exam-card ' + (today ? 'today' : 'past') + ' ' + (expanded ? 'is-expanded' : '') + '"><button class="exam-card-toggle" type="button"' + toggle + '><div class="person-line"><div><div class="person-name">' + esc(record.name) + (multiple ? ' <small>（考试 ' + history.length + ' 次）</small>' : '') + '</div><div class="person-meta">' + esc(record.company || '--') + ' · ' + esc(record.exam_type || '--') + '</div></div><span class="state-pill exam-result ' + (pass ? 'high' : 'low') + '">' + esc(record.score) + ' 分</span></div><div class="exam-card-meta"><span class="' + (today ? 'today-label' : '') + '">' + (today ? '今日考试' : '历史考试') + ' · ' + esc(displayTime(record.created_at)) + '</span><span>' + (multiple ? (expanded ? '收起历史' : '查看历史') : '一次通过') + '</span></div></button><div class="card-footer"><span class="record-time">' + (pass ? '成绩合格' : '成绩未达标') + '</span><button class="exam-detail-button" type="button" onclick="viewExamDetail(' + Number(record.id) + ')">考试详情</button></div>' + historyHtml + '</article>';
-  }
-  function examPager() {
-    var page = 1, total = 0, limit = 20;
-    try { page = examRecordsPage; total = examRecordsTotal; limit = examRecordsLimit; } catch (e) { return ''; }
-    var pages = Math.ceil(total / limit) || 1;
-    if (pages <= 1) return '';
-    return '<div class="pager"><button type="button" ' + (page <= 1 ? 'disabled' : '') + ' onclick="changeExamPage(' + (page - 1) + ')">上一页</button><span>第 ' + page + ' / ' + pages + ' 页 · 共 ' + total + ' 条</span><button type="button" ' + (page >= pages ? 'disabled' : '') + ' onclick="changeExamPage(' + (page + 1) + ')">下一页</button></div>';
-  }
   function settingsPanel() {
     if (state.settingsView !== 'home') return settingsDetailPanel();
     var config = state.settings.config;
@@ -363,12 +316,12 @@
     return settingsDetailHeader('管理员账户', '维护签发姓名及密码') + '<div class="sheet settings-form"><label>姓名（用于合格证批准人）<input id="mobile-profile-name" type="text" maxlength="50" value="' + esc(state.settings.profileName) + '" placeholder="请输入姓名"></label><button class="settings-primary" type="button" onclick="mobileAdminSaveProfileName()">保存姓名</button><label>当前密码<input id="mobile-password-old" type="password" autocomplete="current-password"></label><label>新密码<input id="mobile-password-new" type="password" autocomplete="new-password" placeholder="至少 6 位"></label><label>确认新密码<input id="mobile-password-confirm" type="password" autocomplete="new-password"></label><button class="settings-primary" type="button" onclick="mobileAdminChangePassword()">保存新密码</button></div>';
   }
   function nav() {
-    var tabs = [['records', '记录', 'records'], ['pending', '注册', 'users'], ['exam', '考试', 'exam'], ['settings', '设置', 'settings']];
+    var tabs = [['records', '记录', 'records'], ['pending', '注册', 'users'], ['settings', '设置', 'settings']];
     return '<nav class="app-nav" aria-label="移动管理导航">' + tabs.map(function (tab) { return '<button class="nav-item ' + (state.tab === tab[0] ? 'is-active' : '') + '" type="button" onclick="mobileAdminGo(\'' + tab[0] + '\')">' + icon(tab[2]) + '<span>' + tab[1] + '</span></button>'; }).join('') + '</nav>';
   }
   function render() {
     if (!isMobile()) return;
-    root.innerHTML = '<div class="phone">' + rootHeader() + '<main class="content">' + recordPanel() + pendingPanel() + examPanel() + settingsPanel() + '</main>' + nav() + '</div>';
+    root.innerHTML = '<div class="phone">' + rootHeader() + '<main class="content">' + recordPanel() + pendingPanel() + settingsPanel() + '</main>' + nav() + '</div>';
     moveBell(true);
   }
   function moveBell(toMobile) {
@@ -380,7 +333,6 @@
   function loadCurrentTab() {
     if (state.tab === 'records' && typeof window.loadRecords === 'function') window.loadRecords();
     if (state.tab === 'pending' && typeof window.loadPendingUsers === 'function') window.loadPendingUsers();
-    if (state.tab === 'exam' && typeof window.loadExamRecords === 'function') { window.loadExamRecords(); if (typeof window.loadExamCompanyOptions === 'function') window.loadExamCompanyOptions(); }
   }
   function activate() {
     document.body.classList.add('mobile-admin-live-enabled');
@@ -406,7 +358,6 @@
   }
   wrap('renderRecords', function () { if (isMobile() && state.tab === 'records') render(); });
   wrap('renderPendingUsers', function () { if (isMobile() && state.tab === 'pending') render(); });
-  wrap('renderExamRecords', function (records) { mobileExamRecords = Array.isArray(records) ? records : []; if (isMobile() && state.tab === 'exam') render(); });
   wrap('switchAdminTab', function (tab) { if (!isMobile()) return; state.tab = tab === 'config' ? 'settings' : tab; render(); });
 
   window.mobileAdminGo = function (tab) {
@@ -426,13 +377,11 @@
     if (!state.composing.hasOwnProperty(field)) return;
     state.composing[field] = true;
     if (field === 'record') clearTimeout(searchTimer);
-    if (field === 'exam') clearTimeout(examSearchTimer);
   };
   window.mobileAdminCompositionEnd = function (field, value) {
     if (!state.composing.hasOwnProperty(field)) return;
     state.composing[field] = false;
     if (field === 'record') window.mobileAdminRecordSearch(value);
-    else if (field === 'exam') window.mobileAdminExamSearch(value);
     else if (field === 'pending') window.mobileAdminPendingSearch(value);
   };
   window.mobileAdminRecordSearch = function (value, event) {
@@ -486,43 +435,8 @@
     }
   };
   window.mobileAdminPendingSearch = function (value, event) { if (state.composing.pending || (event && event.isComposing)) return; state.pendingQuery = value; render(); };
-  window.mobileAdminTogglePendingCompany = function (event) { if (event) event.stopPropagation(); state.pendingCompanyOpen = !state.pendingCompanyOpen; state.recordCompanyOpen = false; state.examCompanyOpen = false; render(); };
+  window.mobileAdminTogglePendingCompany = function (event) { if (event) event.stopPropagation(); state.pendingCompanyOpen = !state.pendingCompanyOpen; state.recordCompanyOpen = false; render(); };
   window.mobileAdminSelectPendingCompany = function (company) { state.pendingCompany = company || ''; state.pendingCompanyOpen = false; render(); };
-  window.mobileAdminToggleExamCompany = function (event) { if (event) event.stopPropagation(); state.examCompanyOpen = !state.examCompanyOpen; render(); };
-  window.mobileAdminSelectExamCompany = function (company) {
-    state.examCompanyOpen = false;
-    var input = document.getElementById('exam-filter-company');
-    if (input) input.value = company;
-    try { examRecordsPage = 1; } catch (e) { /* ignore */ }
-    if (typeof window.loadExamRecords === 'function') window.loadExamRecords(); else render();
-  };
-  window.mobileAdminExamSearch = function (value, event) {
-    if (state.composing.exam || (event && event.isComposing)) return;
-    clearTimeout(examSearchTimer);
-    examSearchTimer = setTimeout(function () {
-      try { examFilterName = value; examRecordsPage = 1; document.getElementById('exam-filter-name').value = value; } catch (e) { /* ignore */ }
-      if (typeof window.loadExamRecords === 'function') window.loadExamRecords();
-    }, 260);
-  };
-  window.mobileAdminToggleExamFilters = function (event) { if (event) event.stopPropagation(); state.examFiltersOpen = !state.examFiltersOpen; render(); };
-  window.mobileAdminSelectExamSubject = function (subject) {
-    var select = document.getElementById('exam-filter-type');
-    if (select) select.value = subject;
-    try { examRecordsPage = 1; } catch (e) { /* ignore */ }
-    if (typeof window.loadExamRecords === 'function') window.loadExamRecords(); else render();
-  };
-  window.mobileAdminClearExamFilters = function () {
-    state.examFiltersOpen = false;
-    var company = document.getElementById('exam-filter-company');
-    var subject = document.getElementById('exam-filter-type');
-    var search = document.getElementById('exam-filter-name');
-    if (company) company.value = '';
-    if (subject) subject.value = '';
-    if (search) search.value = '';
-    try { examFilterName = ''; examRecordsPage = 1; } catch (e) { /* ignore */ }
-    if (typeof window.loadExamRecords === 'function') window.loadExamRecords(); else render();
-  };
-  window.mobileAdminToggleExamHistory = function (id) { state.examHistoryId = state.examHistoryId === id ? null : id; render(); };
   function authHeaders() {
     try { return { 'Authorization': token }; } catch (e) { return {}; }
   }
@@ -813,7 +727,7 @@
   document.addEventListener('click', function (event) {
     if (!isMobile()) return;
     var changed = false;
-    if (!event.target.closest('.company-combobox') && (state.recordCompanyOpen || state.pendingCompanyOpen || state.examCompanyOpen)) { state.recordCompanyOpen = false; state.pendingCompanyOpen = false; state.examCompanyOpen = false; changed = true; }
+    if (!event.target.closest('.company-combobox') && (state.recordCompanyOpen || state.pendingCompanyOpen)) { state.recordCompanyOpen = false; state.pendingCompanyOpen = false; changed = true; }
     if (!event.target.closest('.download-wrap') && state.downloadOpen) { state.downloadOpen = false; changed = true; }
     if (changed) render();
   });
