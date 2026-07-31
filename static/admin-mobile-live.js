@@ -21,11 +21,10 @@
     recordFiltersOpen: false,
     recordStatus: 'all',
     downloadOpen: false,
-    composing: { record: false, exam: false, pending: false, restore: false },
+    composing: { record: false, exam: false, pending: false },
     pendingQuery: '',
     pendingCompanyOpen: false,
     pendingCompany: '',
-    restoreQuery: '',
     examCompanyOpen: false,
     examFiltersOpen: false,
     examHistoryId: null,
@@ -66,7 +65,6 @@
       download: '<svg viewBox="0 0 24 24"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>',
       records: '<svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"></path><path d="M8 9h8M8 13h5"></path></svg>',
       users: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"></path><path d="M17 10a3 3 0 1 0-1.2-5.7M17 14c2.2.2 4 2.3 4 4.7"></path></svg>',
-      restore: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7"></path><path d="M4 4v5h5"></path></svg>',
       exam: '<svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h4"></path></svg>',
       settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.1 2.1-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-3v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1-2.1-2.1.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H5.3v-3h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 2.1-2.1.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h3v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 2.1 2.1-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2v3h-.2a1.7 1.7 0 0 0-1.5 1Z"></path></svg>',
       logout: '<svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5"></path><path d="M15 12H3"></path><path d="M21 19V5a2 2 0 0 0-2-2h-7"></path></svg>',
@@ -80,7 +78,6 @@
   function getGlobalArray(identifier) {
     try {
       if (identifier === 'records') return typeof lastFilteredRecords !== 'undefined' && Array.isArray(lastFilteredRecords) ? lastFilteredRecords : [];
-      if (identifier === 'restore') return typeof lastFilteredRestoreRecords !== 'undefined' && Array.isArray(lastFilteredRestoreRecords) ? lastFilteredRestoreRecords : [];
       if (identifier === 'users') return typeof filteredUsersList !== 'undefined' && Array.isArray(filteredUsersList) ? filteredUsersList : [];
     } catch (e) { /* page has not finished initialising yet */ }
     return [];
@@ -125,9 +122,6 @@
   function selectedRecord(id) {
     try { return typeof selectedRecordsMap !== 'undefined' && selectedRecordsMap.has(id); } catch (e) { return false; }
   }
-  function selectedRestore(id) {
-    try { return typeof selectedRestoreRecordsMap !== 'undefined' && selectedRestoreRecordsMap.has(id); } catch (e) { return false; }
-  }
   function recordsForMobile() {
     var list = getGlobalArray('records').slice();
     list.sort(function (a, b) {
@@ -141,8 +135,8 @@
   }
   function rootHeader() {
     return '<header class="app-top">' +
-      '<div class="status-row"><span>管理端</span><span>培训信息系统</span></div>' +
-      '<div class="top-row"><div><h1 class="app-title">培训管理</h1><p class="app-subtitle">人员记录、注册管理与考试信息</p></div><div id="mobile-live-bell-slot" class="bell-slot"></div></div>' +
+      '<div class="status-row"><span>管理端</span><span>焊工考试平台</span></div>' +
+      '<div class="top-row"><div><h1 class="app-title">焊工考试平台</h1><p class="app-subtitle">人员记录、注册管理与考试信息</p></div><div id="mobile-live-bell-slot" class="bell-slot"></div></div>' +
       '</header>';
   }
   function recordPanel() {
@@ -235,24 +229,6 @@
     return '<article class="record-card"><div class="record-head"><div class="person-line"><div class="person"><div class="avatar">' + esc(initials(u.real_name || u.username)) + '</div><div><div class="person-name">' + esc(u.real_name || u.username) + '</div><div class="person-meta">账号：' + esc(u.username || '--') + '</div></div></div><span class="state-pill ' + (u.status === 'pending' ? 'warning' : '') + '">' + status + '</span></div></div>' +
       '<div class="record-details"><div class="wide"><span>工作单位</span><strong>' + esc(u.company || '--') + '</strong></div><div><span>联系电话</span><strong>' + esc(u.phone || u.username || '--') + '</strong></div><div><span>注册时间</span><strong>' + esc(registrationTime) + '</strong></div></div>' +
       '<div class="card-footer"><span class="record-time">审批请点右上角铃铛</span><span class="mobile-actions"><button class="small-action" type="button" onclick="openEditUserModal(' + Number(u.id) + ',' + jsArg(u.username) + ',' + jsArg(u.real_name) + ',' + jsArg(u.company) + ')">编辑</button><button class="small-action warning-action" type="button" onclick="mobileAdminSetUserStatus(' + Number(u.id) + ',' + jsArg(toggleStatus) + ')">' + toggleLabel + '</button><button class="small-action danger-action" type="button" onclick="handleDeleteUser(' + Number(u.id) + ')">删除</button></span></div></article>';
-  }
-  function restorePanel() {
-    var query = String(state.restoreQuery || '').trim().toLowerCase();
-    var records = getGlobalArray('restore').filter(function (r) {
-      return !query || [r.name, r.company, r.phone, r.id_card].some(function (x) { return String(x || '').toLowerCase().indexOf(query) !== -1; });
-    });
-    return '<section class="tab-panel ' + (state.tab === 'restore' ? 'is-active' : '') + '" data-panel="restore">' +
-      '<div class="sheet"><h3 class="sheet-title">门禁恢复管理</h3><div class="list-line"><div>待恢复人员默认已勾选<small>已恢复下载的人员会变灰，仍保留历史。</small></div><button class="small-action" type="button" onclick="exportRestoreData()">下载所选</button></div></div>' +
-      '<div class="page-toolbar"><div class="company-combobox"><span class="search-glyph">' + icon('search') + '</span><input type="search" value="' + esc(state.restoreQuery) + '" placeholder="姓名、单位、身份证、手机号" oncompositionstart="mobileAdminCompositionStart(\'restore\')" oncompositionend="mobileAdminCompositionEnd(\'restore\',this.value)" oninput="mobileAdminRestoreSearch(this.value,event)"></div></div>' +
-      '<div class="record-stack">' + (records.length ? records.map(restoreCard).join('') : '<div class="empty-state">当前没有门禁恢复记录</div>') + '</div></section>';
-  }
-  function restoreCard(r) {
-    var downloaded = Number(r.is_restore_downloaded) === 1;
-    var image = photoUrl(r.photo_path);
-    var checked = selectedRestore(r.id);
-    return '<article class="record-card ' + (downloaded ? 'is-downloaded' : '') + ' ' + (checked ? 'is-selected' : '') + '"><div class="record-head"><input class="record-select" type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="mobileAdminToggleRestore(' + Number(r.id) + ',this.checked)"><div class="person-line"><div class="person">' +
-      (image ? '<button class="photo-thumb" type="button" onclick="zoomImage(' + jsArg(image) + ')"><img src="' + esc(image) + '" alt="' + esc(r.name) + '照片"></button>' : '<div class="avatar">' + esc(initials(r.name)) + '</div>') + '<div><div class="person-name">' + esc(r.name) + '</div><div class="person-meta">' + esc(r.gender || '--') + ' · ' + esc(r.age || '--') + '岁</div></div></div><span class="state-pill ' + (downloaded ? '' : 'warning') + '">' + (downloaded ? '已下载' : '待恢复') + '</span></div></div>' +
-      '<div class="record-details"><div><span>工作单位</span><strong>' + esc(r.company || '--') + '</strong></div><div><span>联系电话</span><strong>' + esc(r.phone || '--') + '</strong></div><div class="wide"><span>身份证号</span><strong>' + esc(r.id_card || '--') + '</strong></div></div><div class="card-footer"><span class="record-time">提交 ' + esc(displayTime(r.created_at)) + '</span><button class="small-action" type="button" onclick="deleteRestoreGate(' + Number(r.id) + ')">删除</button></div></article>';
   }
   function examPanel() {
     var company = '', subject = '', query = '';
@@ -387,12 +363,12 @@
     return settingsDetailHeader('管理员账户', '维护签发姓名及密码') + '<div class="sheet settings-form"><label>姓名（用于合格证批准人）<input id="mobile-profile-name" type="text" maxlength="50" value="' + esc(state.settings.profileName) + '" placeholder="请输入姓名"></label><button class="settings-primary" type="button" onclick="mobileAdminSaveProfileName()">保存姓名</button><label>当前密码<input id="mobile-password-old" type="password" autocomplete="current-password"></label><label>新密码<input id="mobile-password-new" type="password" autocomplete="new-password" placeholder="至少 6 位"></label><label>确认新密码<input id="mobile-password-confirm" type="password" autocomplete="new-password"></label><button class="settings-primary" type="button" onclick="mobileAdminChangePassword()">保存新密码</button></div>';
   }
   function nav() {
-    var tabs = [['records', '记录', 'records'], ['pending', '注册', 'users'], ['restore', '恢复', 'restore'], ['exam', '考试', 'exam'], ['settings', '设置', 'settings']];
+    var tabs = [['records', '记录', 'records'], ['pending', '注册', 'users'], ['exam', '考试', 'exam'], ['settings', '设置', 'settings']];
     return '<nav class="app-nav" aria-label="移动管理导航">' + tabs.map(function (tab) { return '<button class="nav-item ' + (state.tab === tab[0] ? 'is-active' : '') + '" type="button" onclick="mobileAdminGo(\'' + tab[0] + '\')">' + icon(tab[2]) + '<span>' + tab[1] + '</span></button>'; }).join('') + '</nav>';
   }
   function render() {
     if (!isMobile()) return;
-    root.innerHTML = '<div class="phone">' + rootHeader() + '<main class="content">' + recordPanel() + pendingPanel() + restorePanel() + examPanel() + settingsPanel() + '</main>' + nav() + '</div>';
+    root.innerHTML = '<div class="phone">' + rootHeader() + '<main class="content">' + recordPanel() + pendingPanel() + examPanel() + settingsPanel() + '</main>' + nav() + '</div>';
     moveBell(true);
   }
   function moveBell(toMobile) {
@@ -404,7 +380,6 @@
   function loadCurrentTab() {
     if (state.tab === 'records' && typeof window.loadRecords === 'function') window.loadRecords();
     if (state.tab === 'pending' && typeof window.loadPendingUsers === 'function') window.loadPendingUsers();
-    if (state.tab === 'restore' && typeof window.loadRestoreRecords === 'function') window.loadRestoreRecords();
     if (state.tab === 'exam' && typeof window.loadExamRecords === 'function') { window.loadExamRecords(); if (typeof window.loadExamCompanyOptions === 'function') window.loadExamCompanyOptions(); }
   }
   function activate() {
@@ -431,7 +406,6 @@
   }
   wrap('renderRecords', function () { if (isMobile() && state.tab === 'records') render(); });
   wrap('renderPendingUsers', function () { if (isMobile() && state.tab === 'pending') render(); });
-  wrap('renderRestoreRecords', function () { if (isMobile() && state.tab === 'restore') render(); });
   wrap('renderExamRecords', function (records) { mobileExamRecords = Array.isArray(records) ? records : []; if (isMobile() && state.tab === 'exam') render(); });
   wrap('switchAdminTab', function (tab) { if (!isMobile()) return; state.tab = tab === 'config' ? 'settings' : tab; render(); });
 
@@ -460,7 +434,6 @@
     if (field === 'record') window.mobileAdminRecordSearch(value);
     else if (field === 'exam') window.mobileAdminExamSearch(value);
     else if (field === 'pending') window.mobileAdminPendingSearch(value);
-    else if (field === 'restore') window.mobileAdminRestoreSearch(value);
   };
   window.mobileAdminRecordSearch = function (value, event) {
     if (state.composing.record || (event && event.isComposing)) return;
@@ -515,8 +488,6 @@
   window.mobileAdminPendingSearch = function (value, event) { if (state.composing.pending || (event && event.isComposing)) return; state.pendingQuery = value; render(); };
   window.mobileAdminTogglePendingCompany = function (event) { if (event) event.stopPropagation(); state.pendingCompanyOpen = !state.pendingCompanyOpen; state.recordCompanyOpen = false; state.examCompanyOpen = false; render(); };
   window.mobileAdminSelectPendingCompany = function (company) { state.pendingCompany = company || ''; state.pendingCompanyOpen = false; render(); };
-  window.mobileAdminRestoreSearch = function (value, event) { if (state.composing.restore || (event && event.isComposing)) return; state.restoreQuery = value; render(); };
-  window.mobileAdminToggleRestore = function (id, checked) { if (typeof window.handleSingleRestoreCheckboxChange === 'function') window.handleSingleRestoreCheckboxChange({ checked: checked }, id); else render(); };
   window.mobileAdminToggleExamCompany = function (event) { if (event) event.stopPropagation(); state.examCompanyOpen = !state.examCompanyOpen; render(); };
   window.mobileAdminSelectExamCompany = function (company) {
     state.examCompanyOpen = false;
