@@ -610,10 +610,11 @@
       .admin-history-photo-label { margin-bottom:2px; font-size:.58rem; line-height:1.1; }
       .admin-history-photo-images { gap:2px; }
       .admin-history-photo-empty { min-height:40px; font-size:.56rem; }
-      .admin-history-details-grid { grid-template-columns:repeat(2,minmax(0,1fr)); min-width:0; gap:3px 6px; }
-      .admin-history-info-item { gap:2px; font-size:.67rem; line-height:1.1; }
-      .admin-history-info-name { font-size:.76rem; }
-      .admin-history-info-id,.admin-history-info-address { grid-column:1 / -1; }
+      .admin-history-details-grid { grid-template-columns:repeat(3,minmax(0,1fr)); min-width:0; gap:3px 5px; }
+      .admin-history-info-item { gap:2px; min-height:15px; font-size:.64rem; line-height:1.05; }
+      .admin-history-info-name { font-size:.72rem; }
+      .admin-history-info-id,.admin-history-info-address { grid-column:auto; align-items:center; }
+      .admin-history-info-address .admin-history-info-value { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     }
 
     /* 管理端已停用门禁恢复与考试模块，仅保留人员记录、注册用户和系统设置。 */
@@ -643,7 +644,19 @@
     .detail-status-item.success strong { color:#34d399; }
     .detail-status-item.warning strong { color:#fbbf24; }
     .detail-status-item.danger strong { color:#f87171; }
-    .detail-photo-row { flex-wrap: wrap; }
+    .detail-photo-row { display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px !important; align-items:start; }
+    .detail-photo-row .form-group { min-width:0; }
+    .detail-photo-row .photo-uploader,
+    .detail-photo-row .detail-site-photo-preview { width:100% !important; min-height:145px; height:145px !important; box-sizing:border-box; }
+    .detail-photo-row .detail-site-photo-preview { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .detail-photo-row .detail-site-photo-preview button { min-height:0; }
+    .detail-assessment-photo-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:0 0 14px; }
+    .detail-assessment-photo-row[hidden] { display:none !important; }
+    .detail-assessment-photo-row.single-photo-group { grid-template-columns:minmax(0,1fr); }
+    .detail-assessment-photo-group { min-width:0; text-align:center; }
+    .detail-assessment-photo-preview { width:100%; min-height:130px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; padding:4px; box-sizing:border-box; border:1px dashed var(--glass-border); border-radius:8px; background:rgba(255,255,255,.02); }
+    .detail-assessment-photo-preview button { min-width:0; min-height:100px; padding:0; overflow:hidden; border:0; border-radius:5px; background:rgba(0,0,0,.22); cursor:pointer; }
+    .detail-assessment-photo-preview img { width:100%; height:100%; object-fit:cover; display:block; }
     .detail-site-photo-preview { width: 120px; min-height: 160px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px dashed var(--glass-border); border-radius: 8px; background: rgba(255,255,255,.02); }
     .detail-site-photo-preview:has(> :only-child) { grid-template-columns: 1fr; }
     .detail-site-photo-preview button { min-width: 0; min-height: 70px; padding: 0; overflow: hidden; border: 0; border-radius: 5px; background: rgba(0,0,0,.22); cursor: pointer; }
@@ -651,8 +664,17 @@
     .detail-site-photo-empty { display: flex; align-items: center; justify-content: center; grid-column: 1 / -1; min-height: 148px; color: var(--text-muted); font-size: .75rem; text-align: center; }
     @media (max-width: 600px) {
       .detail-status-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
-      .detail-photo-row { gap: 10px !important; }
-      .detail-site-photo-preview { width: 100px; min-height: 132px; }
+      .detail-photo-row { gap:6px !important; }
+      .detail-photo-row label,.detail-assessment-photo-group label { margin-bottom:3px !important; font-size:.7rem !important; }
+      .detail-photo-row .photo-uploader,
+      .detail-photo-row .detail-site-photo-preview { min-height:102px; height:102px !important; }
+      .detail-assessment-photo-row { gap:7px; margin-bottom:10px; }
+      .detail-assessment-photo-preview { min-height:100px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .detail-assessment-photo-preview button { min-height:92px; }
+      #detail-record-form .form-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:8px !important; margin-bottom:12px !important; }
+      #detail-record-form .form-grid .form-group { margin-bottom:0 !important; }
+      #detail-record-form .form-grid label { margin-bottom:2px !important; font-size:.72rem !important; }
+      #detail-record-form .form-grid .form-control { min-height:34px !important; height:34px !important; padding:5px 7px !important; font-size:.8rem !important; }
       .detail-site-photo-empty { min-height: 120px; }
     }
   </style>
@@ -1258,7 +1280,7 @@
               <div id="detail-photo-placeholder" style="font-size: 0.75rem; color: var(--text-muted); padding: 10px; text-align: center;">
                 点击上传现场照片
               </div>
-              <img id="detail-photo-preview" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+              <img id="detail-photo-preview" src="" onclick="event.stopPropagation(); zoomImage(this.src)" style="width: 100%; height: 100%; object-fit: cover; display: none;">
             </div>
           </div>
           
@@ -1269,7 +1291,7 @@
               <div id="detail-idcard-placeholder" style="font-size: 0.75rem; color: var(--text-muted); padding: 10px; text-align: center;">
                 暂无身份证照片
               </div>
-              <img id="detail-idcard-preview" src="" style="width: 100%; height: 100%; object-fit: contain; display: none;">
+              <img id="detail-idcard-preview" src="" onclick="event.stopPropagation(); zoomImage(this.src)" style="width: 100%; height: 100%; object-fit: contain; display: none;">
             </div>
           </div>
           <div class="form-group detail-site-photo-group" style="text-align: center; margin-bottom: 0;">
@@ -1279,6 +1301,17 @@
           <div class="form-group detail-site-photo-group" style="text-align: center; margin-bottom: 0;">
             <label style="display: block; margin-bottom: 6px; text-align: center; font-size: 0.85rem; color: var(--text-muted);">特种作业人员证</label>
             <div id="detail-site-photo-preview-2" class="detail-site-photo-preview"></div>
+          </div>
+        </div>
+
+        <div id="detail-assessment-photo-row" class="detail-assessment-photo-row" hidden>
+          <div id="detail-exam-photo-group" class="detail-assessment-photo-group" hidden>
+            <label style="display:block; margin-bottom:6px; color:var(--text-muted); font-size:.85rem;">考试照片</label>
+            <div id="detail-exam-photo-preview" class="detail-assessment-photo-preview"></div>
+          </div>
+          <div id="detail-ndt-photo-group" class="detail-assessment-photo-group" hidden>
+            <label style="display:block; margin-bottom:6px; color:var(--text-muted); font-size:.85rem;">探伤照片</label>
+            <div id="detail-ndt-photo-preview" class="detail-assessment-photo-preview"></div>
           </div>
         </div>
 
@@ -2294,6 +2327,15 @@
       }
     }
 
+    function getStoredPhotoPaths(value) {
+      try {
+        const paths = JSON.parse(value || '[]');
+        return Array.isArray(paths) ? paths.filter(path => typeof path === 'string' && path) : [];
+      } catch (_) {
+        return [];
+      }
+    }
+
     function adminPhotoUrl(path) {
       return '/' + String(path || '').replace(/\\/g, '/');
     }
@@ -2974,6 +3016,7 @@
         idcardPlaceholder.style.display = 'block';
       }
       renderDetailSitePhotos(record);
+      renderDetailAssessmentPhotos(record);
       
       window._detailPhotoBlob = null;
       document.getElementById('record-detail-modal').style.display = 'flex';
@@ -2986,6 +3029,10 @@
       document.getElementById('detail-idcard-preview').src = '';
       document.getElementById('detail-site-photo-preview-1').innerHTML = '';
       document.getElementById('detail-site-photo-preview-2').innerHTML = '';
+      document.getElementById('detail-exam-photo-preview').innerHTML = '';
+      document.getElementById('detail-ndt-photo-preview').innerHTML = '';
+      document.getElementById('detail-assessment-photo-row').hidden = true;
+      document.getElementById('detail-assessment-photo-row').classList.remove('single-photo-group');
       window._detailPhotoBlob = null;
     }
 
@@ -3003,6 +3050,32 @@
           return `<button type="button" onclick="zoomImage(${JSON.stringify(url)})" title="查看照片 ${photoIndex + 1}"><img src="${escapeHtml(url)}" alt="证件照片 ${photoIndex + 1}"></button>`;
         }).join('');
       });
+    }
+
+    function renderDetailAssessmentPhotos(record) {
+      const sections = [
+        ['detail-exam-photo-group', 'detail-exam-photo-preview', getStoredPhotoPaths(record.latest_welding_exam_photo_paths)],
+        ['detail-ndt-photo-group', 'detail-ndt-photo-preview', getStoredPhotoPaths(record.latest_welding_ndt_photo_paths)]
+      ];
+      let visibleGroups = 0;
+      sections.forEach(([groupId, previewId, paths]) => {
+        const group = document.getElementById(groupId);
+        const preview = document.getElementById(previewId);
+        if (!group || !preview) return;
+        group.hidden = !paths.length;
+        if (!paths.length) {
+          preview.innerHTML = '';
+          return;
+        }
+        visibleGroups += 1;
+        preview.innerHTML = paths.map((path, index) => {
+          const url = adminPhotoUrl(path);
+          return `<button type="button" onclick="zoomImage(${JSON.stringify(url)})" title="查看照片 ${index + 1}"><img src="${escapeHtml(url)}" alt="考核照片 ${index + 1}"></button>`;
+        }).join('');
+      });
+      const row = document.getElementById('detail-assessment-photo-row');
+      row.hidden = !visibleGroups;
+      row.classList.toggle('single-photo-group', visibleGroups === 1);
     }
 
     function handleDetailPhotoChange(e) {

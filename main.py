@@ -2116,6 +2116,20 @@ def get_user_records(name: str = None, current_user = Depends(get_current_user))
              FROM welding_skill_exams w
              WHERE w.record_id = r.id
            ) AS welding_exam_count
+           ,(
+             SELECT w.photo_paths
+             FROM welding_skill_exams w
+             WHERE w.record_id = r.id
+             ORDER BY w.id DESC
+             LIMIT 1
+           ) AS latest_welding_exam_photo_paths
+           ,(
+             SELECT w.ndt_photo_paths
+             FROM welding_skill_exams w
+             WHERE w.record_id = r.id
+             ORDER BY w.id DESC
+             LIMIT 1
+           ) AS latest_welding_ndt_photo_paths
     FROM records r
     LEFT JOIN users u ON r.user_id = u.id
     WHERE {" AND ".join(conditions)}
@@ -2726,7 +2740,9 @@ def get_all_records(start_date: str = None, end_date: str = None, company: str =
         SELECT r.*, u.real_name as recorder_name,
                (SELECT w.result FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_exam_result,
                 (SELECT w.ndt_status FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_status,
-                (SELECT COUNT(*) FROM welding_skill_exams w WHERE w.record_id = r.id) AS welding_exam_count
+                (SELECT COUNT(*) FROM welding_skill_exams w WHERE w.record_id = r.id) AS welding_exam_count,
+                (SELECT w.photo_paths FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_exam_photo_paths,
+                (SELECT w.ndt_photo_paths FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_photo_paths
         FROM records r 
         LEFT JOIN users u ON r.user_id = u.id 
         {where_clause}
@@ -2740,7 +2756,9 @@ def get_all_records(start_date: str = None, end_date: str = None, company: str =
         SELECT r.*, u.real_name as recorder_name,
                (SELECT w.result FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_exam_result,
                 (SELECT w.ndt_status FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_status,
-                (SELECT COUNT(*) FROM welding_skill_exams w WHERE w.record_id = r.id) AS welding_exam_count
+                (SELECT COUNT(*) FROM welding_skill_exams w WHERE w.record_id = r.id) AS welding_exam_count,
+                (SELECT w.photo_paths FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_exam_photo_paths,
+                (SELECT w.ndt_photo_paths FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_photo_paths
         FROM records r 
         LEFT JOIN users u ON r.user_id = u.id 
         {where_clause}

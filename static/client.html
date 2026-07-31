@@ -382,10 +382,11 @@
       .history-photo-label { font-size: 0.58rem; margin-bottom: 2px; line-height: 1.1; }
       .history-photo-images { gap: 2px; }
       .history-photo-empty { min-height: 40px; font-size: 0.56rem; }
-      .history-details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; gap: 3px 6px; }
-      .history-info-item { gap: 2px; font-size: 0.67rem; line-height: 1.1; }
-      .history-info-name { font-size: 0.76rem; }
-      .history-info-id, .history-info-address { grid-column: 1 / -1; }
+      .history-details-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); min-width: 0; gap: 3px 5px; }
+      .history-info-item { gap: 2px; min-height: 15px; font-size: 0.64rem; line-height: 1.05; }
+      .history-info-name { font-size: 0.72rem; }
+      .history-info-id, .history-info-address { grid-column: auto; align-items: center; }
+      .history-info-address .history-info-value { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #restore-table-body td:nth-child(3) {
         padding-right: 66px !important;
       }
