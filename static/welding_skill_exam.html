@@ -102,24 +102,13 @@
       if (removed) URL.revokeObjectURL(removed.url);
       updatePhotoList();
     }
-    async function compressImageFile(file) {
-      const sourceUrl = URL.createObjectURL(file);
-      const source = new Image();
-      await new Promise((resolve, reject) => { source.onload = resolve; source.onerror = reject; source.src = sourceUrl; });
-      let targetWidth = Math.min(source.naturalWidth, 1600);
-      let targetHeight = Math.round(source.naturalHeight * targetWidth / source.naturalWidth);
-      for (let scaleStep = 0; scaleStep < 6; scaleStep++) {
-        const canvas = document.createElement('canvas');
-        canvas.width = targetWidth; canvas.height = targetHeight;
-        canvas.getContext('2d').drawImage(source, 0, 0, targetWidth, targetHeight);
-        for (let quality = 0.84; quality >= 0.4; quality -= 0.08) {
-          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
-          if (blob && blob.size <= 500 * 1024) { URL.revokeObjectURL(sourceUrl); return blob; }
-        }
-        targetWidth = Math.round(targetWidth * 0.82); targetHeight = Math.round(targetHeight * 0.82);
-      }
-      URL.revokeObjectURL(sourceUrl);
-      throw new Error('照片压缩后仍超过 500KB，请靠近拍摄对象后重试');
+    function originalImageFilename(file, fallback) {
+      return /\.(jpe?g|png)$/i.test(file.name || '') ? file.name : fallback;
+    }
+
+    async function prepareImageFile(file) {
+      if (!file.type.startsWith('image/')) throw new Error('所选文件不是有效的图片');
+      return file;
     }
     async function handleSelectedPhoto(event) {
       const file = event.target.files && event.target.files[0];
@@ -129,8 +118,8 @@
       const activeCaptureButton = document.getElementById('capture-button');
       if (activeCaptureButton) activeCaptureButton.disabled = true;
       try {
-        const blob = await compressImageFile(file);
-        photos.push({ blob, url: URL.createObjectURL(blob) });
+        const blob = await prepareImageFile(file);
+        photos.push({ blob, filename: originalImageFilename(file, 'welding_exam.jpg'), url: URL.createObjectURL(blob) });
         updatePhotoList();
         setNotice(`已保存第 ${photos.length} 张照片，可继续拍摄。`, 'success');
       } catch (error) { setNotice(error.message || '拍摄失败，请重试。', 'error'); }
@@ -154,7 +143,7 @@
       if (result === 'unqualified' && !defects) { setNotice('请填写缺陷问题。', 'error'); return; }
       const formData = new FormData();
       formData.append('record_id', String(recordId)); formData.append('result', result); formData.append('defect_issues', defects); formData.append('requires_ndt', String(requiresNdt));
-      photos.forEach((photo, index) => formData.append('photos', photo.blob, `welding_exam_${index + 1}.jpg`));
+      photos.forEach((photo, index) => formData.append('photos', photo.blob, photo.filename || `welding_exam_${index + 1}.jpg`));
       document.getElementById('saving').classList.add('visible');
       try {
         const response = await fetch('/api/welding-skill-exam', { method:'POST', headers:{ Authorization: token }, body:formData });

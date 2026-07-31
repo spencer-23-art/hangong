@@ -821,7 +821,8 @@
       await fetchUserStatus();
     })();
 
-    let compressedPhotoBlob = null; 
+    let compressedPhotoBlob = null;
+    let compressedPhotoFilename = 'photo.jpg';
     let sitePhotoGroups = [[], []];
     let removedSitePhotoPaths = [];
     let currentEditRecordId = null;
@@ -1603,7 +1604,8 @@
       preview.src = '/' + record.photo_path;
       preview.style.display = 'block';
       placeholder.style.display = 'none';
-      compressedPhotoBlob = null; 
+      compressedPhotoBlob = null;
+      compressedPhotoFilename = 'photo.jpg';
       loadSavedSitePhotos(record.site_photo_paths);
 
       placeholder.innerHTML = `
@@ -1677,6 +1679,7 @@
 
       // 重置照片预览
       compressedPhotoBlob = null;
+      compressedPhotoFilename = 'photo.jpg';
       resetSitePhotos();
       document.getElementById('photo-preview').style.display = 'none';
       const placeholder = document.getElementById('uploader-placeholder');
@@ -1710,10 +1713,13 @@
       document.getElementById('image-modal').style.display = 'none';
     }
 
+    function originalImageFilename(file, fallback) {
+      return /\.(jpe?g|png|gif)$/i.test(file.name || '') ? file.name : fallback;
+    }
+
     function handlePhotoChange(event) {
       const file = event.target.files[0];
       if (!file) return;
-
       if (!file.type.startsWith('image/')) {
         showAlert('error', '所选文件不是有效的图片！');
         return;
@@ -1721,23 +1727,12 @@
 
       const placeholder = document.getElementById('uploader-placeholder');
       const preview = document.getElementById('photo-preview');
-      
-      placeholder.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin">
-          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
-          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"></path>
-        </svg>
-        <p>正在自动压缩照片（不超过 500KB）...</p>
-      `;
-
-      compressImageFile(file, 0, 500, (blob) => {
-        compressedPhotoBlob = blob;
-        const blobUrl = URL.createObjectURL(blob);
-        preview.src = blobUrl;
-        preview.style.display = 'block';
-        placeholder.style.display = 'none';
-        console.log(`现场照压缩成功！原图大小: ${(file.size/1024).toFixed(1)}KB, 压缩后大小: ${(blob.size/1024).toFixed(1)}KB`);
-      });
+      compressedPhotoBlob = file;
+      compressedPhotoFilename = originalImageFilename(file, 'photo.jpg');
+      preview.src = URL.createObjectURL(file);
+      preview.style.display = 'block';
+      placeholder.style.display = 'none';
+      showAlert('success', `已保留原图：${(file.size / 1024 / 1024).toFixed(2)}MB`);
     }
 
     function renderSitePhotoGroup(groupIndex) {
@@ -1786,20 +1781,11 @@
       }
     }
 
-    function compressSitePhoto(file) {
-      return new Promise((resolve, reject) => {
-        if (!file.type.startsWith('image/')) {
-          reject(new Error('所选文件不是有效的图片'));
-          return;
-        }
-        compressImageFile(file, 0, 500, (blob) => {
-          if (!blob || blob.size > 500 * 1024) {
-            reject(new Error('照片压缩后仍超过 500KB，请更换照片重试'));
-            return;
-          }
-          resolve(blob);
-        });
-      });
+    function prepareSitePhoto(file) {
+      if (!file.type.startsWith('image/')) {
+        return Promise.reject(new Error('所选文件不是有效的图片'));
+      }
+      return Promise.resolve(file);
     }
 
     async function handleSitePhotos(event, groupIndex) {
@@ -1809,18 +1795,18 @@
 
       const placeholder = document.getElementById(`site-photo-placeholder-${groupIndex + 1}`);
       placeholder.style.display = 'flex';
-      placeholder.innerHTML = '<p>正在压缩照片（每张不超过 500KB）...</p>';
+      placeholder.innerHTML = '<p>正在读取原图，不进行压缩...</p>';
 
       try {
         for (const file of files) {
-          const blob = await compressSitePhoto(file);
-          sitePhotoGroups[groupIndex].push({ blob, url: URL.createObjectURL(blob) });
+          const blob = await prepareSitePhoto(file);
+          sitePhotoGroups[groupIndex].push({ blob, filename: originalImageFilename(file, 'site_photo.jpg'), url: URL.createObjectURL(blob) });
         }
         renderSitePhotoGroup(groupIndex);
-        showAlert('success', `现场照片已添加 ${files.length} 张，每张均不超过 500KB`);
+        showAlert('success', `现场照片已添加 ${files.length} 张，已保留原图质量`);
       } catch (err) {
         renderSitePhotoGroup(groupIndex);
-        showAlert('error', err.message || '现场照片压缩失败，请重试');
+        showAlert('error', err.message || '现场照片读取失败，请重试');
       }
     }
 
@@ -1875,12 +1861,12 @@
       formData.append('id_card_img_path', document.getElementById('id_card_img_path').value);
       
       if (compressedPhotoBlob) {
-        formData.append('photo', compressedPhotoBlob, 'photo.jpg');
+        formData.append('photo', compressedPhotoBlob, compressedPhotoFilename);
       }
       sitePhotoGroups.forEach((photos, groupIndex) => {
         photos.forEach((photo, photoIndex) => {
           if (photo.blob) {
-            formData.append(`site_photo_group_${groupIndex + 1}`, photo.blob, `site_photo_${groupIndex + 1}_${photoIndex + 1}.jpg`);
+            formData.append(`site_photo_group_${groupIndex + 1}`, photo.blob, photo.filename || `site_photo_${groupIndex + 1}_${photoIndex + 1}.jpg`);
           }
         });
       });
@@ -1954,6 +1940,7 @@
           }
           
           compressedPhotoBlob = null;
+          compressedPhotoFilename = 'photo.jpg';
           resetSitePhotos();
           document.getElementById('photo-preview').style.display = 'none';
           const placeholder = document.getElementById('uploader-placeholder');

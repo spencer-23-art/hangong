@@ -80,6 +80,9 @@ from app.config import DB_PATH, UPLOAD_DIR, TEMP_IDS_DIR, REDIS_URL, CARDS_DIR
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
 INFO_CARD_TEMPLATE = os.path.join(TEMPLATE_DIR, 'information_card.docx')
 CERTIFICATE_TEMPLATE = os.path.join(TEMPLATE_DIR, 'qualification_certificate.docx')
+# Uploads used in information cards are retained as original files.  This is a
+# safety limit only; it is not an image compression target.
+MAX_ORIGINAL_PHOTO_BYTES = 15 * 1024 * 1024
 
 def _download_filename(name, suffix):
     return f"{(name or '人员').strip()}{suffix}"
@@ -173,15 +176,19 @@ def _build_photo_sheet(paths, work_dir, name):
     images = images[:6]
     columns = min(3, len(images))
     rows = (len(images) + columns - 1) // columns
-    cell_width, cell_height = 420, 300
+    # The previous 420x300 JPEG contact sheet threw away most of the detail
+    # before LibreOffice ever received the image.  Keep a print-ready sheet
+    # and save it losslessly so the information-card PDF starts with the best
+    # available source quality.
+    cell_width, cell_height = 1200, 900
     sheet = Image.new('RGB', (columns * cell_width, rows * cell_height), 'white')
     for index, image in enumerate(images):
         image.thumbnail((cell_width - 12, cell_height - 12), Image.Resampling.LANCZOS)
         x = (index % columns) * cell_width + (cell_width - image.width) // 2
         y = (index // columns) * cell_height + (cell_height - image.height) // 2
         sheet.paste(image, (x, y))
-    path = os.path.join(work_dir, f"{name}.jpg")
-    sheet.save(path, 'JPEG', quality=90)
+    path = os.path.join(work_dir, f"{name}.png")
+    sheet.save(path, 'PNG', compress_level=0)
     return path
 
 def _convert_docx_to_pdf(source_docx, output_dir):
@@ -625,9 +632,9 @@ async def _prepare_site_photos(photo_groups):
                 continue
             if upload.content_type and not upload.content_type.startswith('image/'):
                 raise HTTPException(status_code=400, detail="现场照片必须为图片文件")
-            content = await upload.read(500 * 1024 + 1)
-            if len(content) > 500 * 1024:
-                raise HTTPException(status_code=400, detail="现场照片压缩后不能超过 500KB")
+            content = await upload.read(MAX_ORIGINAL_PHOTO_BYTES + 1)
+            if len(content) > MAX_ORIGINAL_PHOTO_BYTES:
+                raise HTTPException(status_code=400, detail="现场照片不能超过 15MB")
             extension = os.path.splitext(upload.filename)[1].lower()
             if extension not in allowed_extensions:
                 extension = '.jpg'
@@ -1994,10 +2001,10 @@ async def create_record(
     if not file_ext or file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="不支持的图片格式，仅允许 jpg, jpeg, png, gif")
         
-    # 限制大小（5MB）
-    content = await photo.read(5 * 1024 * 1024 + 1)
-    if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="照片文件大小不能超过 5MB")
+    # Keep the original headshot for information-card generation.
+    content = await photo.read(MAX_ORIGINAL_PHOTO_BYTES + 1)
+    if len(content) > MAX_ORIGINAL_PHOTO_BYTES:
+        raise HTTPException(status_code=400, detail="照片文件大小不能超过 15MB")
     await photo.seek(0)
     
     filename = f"{current_user['id']}_{int(datetime.now().timestamp())}{file_ext}"
@@ -2155,11 +2162,11 @@ async def save_welding_skill_exam(
     for photo in uploaded_photos:
         if photo.content_type and not photo.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="考试照片必须为图片文件")
-        content = await photo.read(500 * 1024 + 1)
+        content = await photo.read(MAX_ORIGINAL_PHOTO_BYTES + 1)
         if not content:
             raise HTTPException(status_code=400, detail="存在空白考试照片，请重新拍摄")
-        if len(content) > 500 * 1024:
-            raise HTTPException(status_code=400, detail="考试照片压缩后不能超过500KB")
+        if len(content) > MAX_ORIGINAL_PHOTO_BYTES:
+            raise HTTPException(status_code=400, detail="考试照片不能超过15MB")
         extension = os.path.splitext(photo.filename)[1].lower()
         prepared_photos.append((extension if extension in allowed_extensions else '.jpg', content))
 
@@ -2231,9 +2238,9 @@ async def complete_welding_ndt(
     for photo in uploaded_photos:
         if photo.content_type and not photo.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="探伤照片必须为图片文件")
-        content = await photo.read(500 * 1024 + 1)
-        if not content or len(content) > 500 * 1024:
-            raise HTTPException(status_code=400, detail="探伤照片压缩后必须小于500KB且不能为空")
+        content = await photo.read(MAX_ORIGINAL_PHOTO_BYTES + 1)
+        if not content or len(content) > MAX_ORIGINAL_PHOTO_BYTES:
+            raise HTTPException(status_code=400, detail="探伤照片不能为空且不能超过15MB")
         extension = os.path.splitext(photo.filename)[1].lower()
         prepared_photos.append((extension if extension in allowed_extensions else '.jpg', content))
 
