@@ -1,4 +1,4 @@
-package com.peixun.mobile
+package com.hangong.mobile
 
 import android.Manifest
 import android.app.Activity
@@ -190,7 +190,10 @@ class MainActivity : Activity() {
             displayZoomControls = false
             mediaPlaybackRequiresUserGesture = true
             mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            userAgentString = "$userAgentString PeixunMobile/1.0"
+            // The APK is only a WebView shell.  Always prefer the current
+            // server version so routine system updates never require an APK update.
+            cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+            userAgentString = "$userAgentString HangongManagement/1.0"
         }
         CookieManager.getInstance().setAcceptCookie(true)
 

@@ -12,7 +12,7 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@drawable/tubiao"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Peixun"
+        android:theme="@style/Theme.Hangong"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"

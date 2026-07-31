@@ -20,11 +20,11 @@ val generateLauncherIcon by tasks.registering(Copy::class) {
 }
 
 android {
-    namespace = "com.peixun.mobile"
+    namespace = "com.hangong.mobile"
     compileSdk = 35
 
     defaultConfig {
-    applicationId = "com.hangong.mobile"
+        applicationId = "com.hangong.mobile"
         minSdk = 26
         targetSdk = 35
         versionCode = buildNumber

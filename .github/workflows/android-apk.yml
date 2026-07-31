@@ -47,16 +47,16 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          gradle :app:assembleRelease --no-daemon 2>&1 | tee "$RUNNER_TEMP/peixun-android-build.log"
+          gradle :app:assembleRelease --no-daemon 2>&1 | tee "$RUNNER_TEMP/hangong-android-build.log"
           exit ${PIPESTATUS[0]}
 
       - name: Surface build failure
         if: ${{ steps.apk_build.outcome == 'failure' }}
         shell: bash
         run: |
-          summary=$(grep -E '(^ERROR:|^error:|^AAPT:|Android resource linking failed|resource .* not found|attribute .* not found)' "$RUNNER_TEMP/peixun-android-build.log" | tail -n 10 | tr '\n' ' ' | sed 's/%/%25/g' | cut -c1-900)
+          summary=$(grep -E '(^ERROR:|^error:|^AAPT:|Android resource linking failed|resource .* not found|attribute .* not found)' "$RUNNER_TEMP/hangong-android-build.log" | tail -n 10 | tr '\n' ' ' | sed 's/%/%25/g' | cut -c1-900)
           if [ -z "$summary" ]; then
-            summary=$(tail -n 12 "$RUNNER_TEMP/peixun-android-build.log" | tr '\n' ' ' | sed 's/%/%25/g' | cut -c1-900)
+            summary=$(tail -n 12 "$RUNNER_TEMP/hangong-android-build.log" | tr '\n' ' ' | sed 's/%/%25/g' | cut -c1-900)
           fi
           echo "::error title=APK build failed::${summary}"
           exit 1
@@ -66,7 +66,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: hangong-mobile-build-log-${{ github.run_number }}
-          path: ${{ runner.temp }}/peixun-android-build.log
+          path: ${{ runner.temp }}/hangong-android-build.log
           if-no-files-found: warn
           retention-days: 14
 
