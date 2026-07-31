@@ -166,6 +166,27 @@
     .history-exit-control { display:flex; align-items:center; justify-content:center; gap:4px; flex-wrap:wrap; }
     .history-exit-date { width:118px; height:29px; padding:3px 5px; font-size:.74rem; }
     .form-control.field-missing { border-color:#f87171 !important; box-shadow:0 0 0 2px rgba(248,113,113,.18); }
+    #image-modal { z-index: 3000; }
+    .client-detail-card { width:min(900px, calc(100vw - 24px)); max-height:88vh; overflow-y:auto; margin:0; padding:16px; border:1px solid var(--glass-border); border-radius:12px; background:#1e293b; box-shadow:0 18px 50px rgba(0,0,0,.45); }
+    .client-detail-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .client-detail-head h3 { margin:0; font-size:1rem; }
+    .client-detail-close { width:auto; min-width:60px; margin:0; padding:6px 10px; }
+    .client-detail-status, .client-detail-fields { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:6px; }
+    .client-detail-status { margin-bottom:10px; }
+    .client-detail-status-item, .client-detail-field { min-width:0; padding:6px 7px; border:1px solid var(--glass-border); border-radius:7px; background:rgba(255,255,255,.025); }
+    .client-detail-status-item span, .client-detail-field span { display:block; color:var(--text-muted); font-size:.66rem; }
+    .client-detail-status-item strong, .client-detail-field strong { display:block; overflow:hidden; margin-top:2px; font-size:.76rem; line-height:1.25; text-overflow:ellipsis; white-space:nowrap; }
+    .client-detail-field.wide { grid-column:span 2; }
+    .client-detail-photo-grid, .client-detail-assessment-grid { display:grid; gap:6px; margin-bottom:9px; }
+    .client-detail-photo-grid { grid-template-columns:repeat(4, minmax(0, 1fr)); }
+    .client-detail-assessment-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+    .client-detail-photo-group { min-width:0; padding:4px; border:1px solid var(--glass-border); border-radius:8px; background:rgba(255,255,255,.025); }
+    .client-detail-photo-label { display:block; margin-bottom:3px; color:var(--text-muted); font-size:.68rem; text-align:center; }
+    .client-detail-photo-images { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:4px; }
+    .client-detail-photo-images:has(> :only-child) { grid-template-columns:1fr; }
+    .client-detail-photo-button { min-width:0; aspect-ratio:3 / 4; padding:0; overflow:hidden; border:0; border-radius:5px; background:rgba(0,0,0,.25); cursor:zoom-in; }
+    .client-detail-photo-button img { display:block; width:100%; height:100%; object-fit:cover; }
+    .client-detail-photo-empty { display:flex; align-items:center; justify-content:center; min-height:64px; color:var(--text-muted); font-size:.68rem; }
     /* 录入表单使用更紧凑的行距，保留移动端触控高度。 */
     #form-record .form-group { margin-bottom:8px; }
     #form-record .form-grid { gap:8px 10px !important; }
@@ -376,6 +397,16 @@
       .history-info-name { font-size: 0.72rem; }
       .history-info-id, .history-info-address { grid-column: auto; align-items: center; }
       .history-info-address .history-info-value { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .client-detail-card { width:calc(100vw - 18px); max-height:92vh; padding:12px; }
+      .client-detail-status, .client-detail-fields { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:5px; }
+      .client-detail-status-item, .client-detail-field { padding:5px 6px; }
+      .client-detail-field.wide { grid-column:span 2; }
+      .client-detail-photo-grid { gap:3px; }
+      .client-detail-assessment-grid { gap:4px; }
+      .client-detail-photo-group { padding:3px; }
+      .client-detail-photo-label { font-size:.58rem; }
+      .client-detail-photo-images { gap:2px; }
+      .client-detail-photo-empty { min-height:46px; font-size:.58rem; }
     }
 
     /* 提示信息过渡 */
@@ -598,6 +629,18 @@
   <!-- 图片放大预览模态框 -->
   <div id="image-modal" class="modal" onclick="closeModal()">
     <img class="modal-content" id="modal-img">
+  </div>
+
+  <div id="client-record-detail-modal" class="modal" onclick="closeClientRecordDetail()">
+    <section class="client-detail-card" onclick="event.stopPropagation()">
+      <div class="client-detail-head">
+        <h3 id="client-detail-title">人员信息详情</h3>
+        <button type="button" class="btn btn-secondary client-detail-close" onclick="closeClientRecordDetail()">关闭</button>
+      </div>
+      <div id="client-detail-status" class="client-detail-status"></div>
+      <div id="client-detail-photos"></div>
+      <div id="client-detail-fields" class="client-detail-fields"></div>
+    </section>
   </div>
 
   </main><!-- /.app-content -->
@@ -936,6 +979,68 @@
       return `<div class="history-photo-item"><span class="history-photo-label">${escapeHtml(label)}</span><div class="history-photo-images">${content}</div></div>`;
     }
 
+    function getHistoryAssessmentPhotoUrls(value) {
+      try {
+        return JSON.parse(value || '[]')
+          .filter(path => typeof path === 'string' && path)
+          .map(toHistoryPhotoUrl);
+      } catch (err) {
+        return [];
+      }
+    }
+
+    function detailPhotoGroup(label, photoUrls) {
+      const content = photoUrls.length
+        ? photoUrls.map(url => `<button type="button" class="client-detail-photo-button" data-photo-url="${escapeHtml(url)}" onclick="event.stopPropagation(); previewImage(this.dataset.photoUrl)"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" onerror="this.closest('.client-detail-photo-button').remove()"></button>`).join('')
+        : '<span class="client-detail-photo-empty">暂无照片</span>';
+      return `<div class="client-detail-photo-group"><span class="client-detail-photo-label">${escapeHtml(label)}</span><div class="client-detail-photo-images">${content}</div></div>`;
+    }
+
+    function historyExamSummary(row) {
+      const result = row.latest_welding_exam_result;
+      const ndt = row.latest_welding_ndt_status;
+      const examText = result === 'qualified' ? (ndt === 'pending' ? '合格·待探伤' : '合格') : (result === 'unqualified' ? (Number(row.welding_exam_count) >= 2 ? '不合格' : '待补考') : '未考试');
+      const ndtText = result !== 'qualified' ? '--' : (ndt === 'qualified' ? '探伤合格' : (ndt === 'unqualified' ? '探伤不合格' : (ndt === 'pending' ? '待探伤' : '无需探伤')));
+      const finalText = result === 'qualified' && ['qualified', 'not_required'].includes(ndt) ? '最终合格' : (result === 'qualified' ? '待探伤' : (result === 'unqualified' ? (Number(row.welding_exam_count) >= 2 ? '最终不合格' : '待补考') : '待考试'));
+      return { examText, ndtText, finalText };
+    }
+
+    function openClientRecordDetail(id) {
+      const row = historyData.find(record => Number(record.id) === Number(id));
+      if (!row) { showAlert('error', '未找到该人员信息，请刷新后重试。'); return; }
+      const sitePhotos = getHistorySitePhotoGroups(row.site_photo_paths);
+      const headshotUrls = row.photo_path ? ['/' + String(row.photo_path).replace(/\\/g, '/')] : [];
+      const idCardUrls = row.id_card ? [`/uploads/idcards/${encodeURIComponent(row.id_card)}.png?token=${encodeURIComponent(getSessionItem('token') || '')}`] : [];
+      const examPhotos = getHistoryAssessmentPhotoUrls(row.latest_welding_exam_photo_paths);
+      const ndtPhotos = getHistoryAssessmentPhotoUrls(row.latest_welding_ndt_photo_paths);
+      const summary = historyExamSummary(row);
+      const statusItems = [
+        ['录入状态', row.name && row.id_card && row.phone && row.address && row.photo_path ? '资料完整' : '资料待补'],
+        ['考试结果', summary.examText],
+        ['探伤结果', summary.ndtText],
+        ['最终状态', summary.finalText],
+        ['考试次数', `${Number(row.welding_exam_count || 0)} 次`],
+        ['录入时间', String(row.created_at || '--').replace('T', ' ').slice(0, 16)]
+      ];
+      const fields = [
+        ['姓名', row.name], ['性别 / 年龄', `${row.gender || '--'} · ${row.age || '--'}岁`],
+        ['身份证号', row.id_card], ['联系电话', row.phone], ['工作单位', row.company || '--'], ['岗位', row.job || '--'],
+        ['区域权限', row.region_auth || '--'], ['班组', row.team || '--'], ['考试项目', row.exam_project || '--'], ['证件作业项', row.certificate_work_item || '--'],
+        ['证件有效期', row.certificate_expiry || '--'], ['焊工代号', row.welder_code || '--'], ['地址', row.address || '--', true]
+      ];
+      document.getElementById('client-detail-title').textContent = `${row.name || '人员'} · 信息详情`;
+      document.getElementById('client-detail-status').innerHTML = statusItems.map(([label, value]) => `<div class="client-detail-status-item"><span>${escapeHtml(label)}</span><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong></div>`).join('');
+      document.getElementById('client-detail-photos').innerHTML =
+        `<div class="client-detail-photo-grid">${detailPhotoGroup('大头照', headshotUrls)}${detailPhotoGroup('身份证照片', idCardUrls)}${detailPhotoGroup('焊工证', sitePhotos.welderCertificate.map(toHistoryPhotoUrl))}${detailPhotoGroup('特种作业人员证', sitePhotos.specialOperationCertificate.map(toHistoryPhotoUrl))}</div>` +
+        ((examPhotos.length || ndtPhotos.length) ? `<div class="client-detail-assessment-grid">${detailPhotoGroup('考试照片', examPhotos)}${detailPhotoGroup('探伤照片', ndtPhotos)}</div>` : '');
+      document.getElementById('client-detail-fields').innerHTML = fields.map(([label, value, wide]) => `<div class="client-detail-field ${wide ? 'wide' : ''}"><span>${escapeHtml(label)}</span><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong></div>`).join('');
+      document.getElementById('client-record-detail-modal').style.display = 'flex';
+    }
+
+    function closeClientRecordDetail() {
+      document.getElementById('client-record-detail-modal').style.display = 'none';
+    }
+
     function startWeldingSkillExam(recordId) {
       window.location.href = `/welding-skill-exam?record_id=${encodeURIComponent(recordId)}`;
     }
@@ -1039,6 +1144,7 @@
               <td style="text-align: center; vertical-align: middle;">
                 <div class="history-record-actions" style="display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap;">
                   ${isOwner ? (recordLocked ? `<button class="btn btn-secondary history-card-action-button" style="padding:5px 12px;font-size:.8rem;margin:0;width:auto;min-width:60px;opacity:.65;" disabled>已锁定</button>` : `<button class="btn btn-success history-card-action-button" style="padding:5px 12px;font-size:.8rem;margin:0;width:auto;min-width:60px;" onclick="editRecord(${row.id})">修改</button>`) : '<span class="history-readonly-note">仅查看</span>'}
+                  <button class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; box-sizing: border-box;" onclick="openClientRecordDetail(${row.id})">详情</button>
                   <button class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; box-sizing: border-box;" onclick="downloadInfoCard(${row.id})">信息卡下载</button>
                   ${examAction}
                   ${isOwner && recordLocked ? (row.exit_date ? `<span class="history-exit-control"><span style="color:var(--text-muted);font-size:.76rem;">退场</span><strong style="font-size:.78rem;">${escapeHtml(row.exit_date)}</strong></span>` : `<span class="history-exit-control"><input id="exit-date-${row.id}" class="form-control history-exit-date" type="date"><button class="btn btn-danger history-card-action-button" style="padding:5px 9px;font-size:.76rem;margin:0;width:auto;min-width:48px;" onclick="setRecordExit(${row.id})">退场</button></span>`) : ''}
