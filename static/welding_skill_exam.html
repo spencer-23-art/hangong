@@ -114,12 +114,12 @@
         canvas.getContext('2d').drawImage(source, 0, 0, targetWidth, targetHeight);
         for (let quality = 0.84; quality >= 0.4; quality -= 0.08) {
           const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
-          if (blob && blob.size <= 200 * 1024) { URL.revokeObjectURL(sourceUrl); return blob; }
+          if (blob && blob.size <= 500 * 1024) { URL.revokeObjectURL(sourceUrl); return blob; }
         }
         targetWidth = Math.round(targetWidth * 0.82); targetHeight = Math.round(targetHeight * 0.82);
       }
       URL.revokeObjectURL(sourceUrl);
-      throw new Error('照片压缩后仍超过 200KB，请靠近拍摄对象后重试');
+      throw new Error('照片压缩后仍超过 500KB，请靠近拍摄对象后重试');
     }
     async function handleSelectedPhoto(event) {
       const file = event.target.files && event.target.files[0];

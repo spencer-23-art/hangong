@@ -1727,10 +1727,10 @@
           <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
           <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"></path>
         </svg>
-        <p>正在自动压缩照片(控制在120K-199K)...</p>
+        <p>正在自动压缩照片（不超过 500KB）...</p>
       `;
 
-      compressImageFile(file, 120, 199, (blob) => {
+      compressImageFile(file, 0, 500, (blob) => {
         compressedPhotoBlob = blob;
         const blobUrl = URL.createObjectURL(blob);
         preview.src = blobUrl;
@@ -1792,9 +1792,9 @@
           reject(new Error('所选文件不是有效的图片'));
           return;
         }
-        compressImageFile(file, 0, 200, (blob) => {
-          if (!blob || blob.size > 200 * 1024) {
-            reject(new Error('照片压缩后仍超过 200KB，请更换照片重试'));
+        compressImageFile(file, 0, 500, (blob) => {
+          if (!blob || blob.size > 500 * 1024) {
+            reject(new Error('照片压缩后仍超过 500KB，请更换照片重试'));
             return;
           }
           resolve(blob);
@@ -1809,7 +1809,7 @@
 
       const placeholder = document.getElementById(`site-photo-placeholder-${groupIndex + 1}`);
       placeholder.style.display = 'flex';
-      placeholder.innerHTML = '<p>正在压缩照片（每张不超过 200KB）...</p>';
+      placeholder.innerHTML = '<p>正在压缩照片（每张不超过 500KB）...</p>';
 
       try {
         for (const file of files) {
@@ -1817,7 +1817,7 @@
           sitePhotoGroups[groupIndex].push({ blob, url: URL.createObjectURL(blob) });
         }
         renderSitePhotoGroup(groupIndex);
-        showAlert('success', `现场照片已添加 ${files.length} 张，每张均不超过 200KB`);
+        showAlert('success', `现场照片已添加 ${files.length} 张，每张均不超过 500KB`);
       } catch (err) {
         renderSitePhotoGroup(groupIndex);
         showAlert('error', err.message || '现场照片压缩失败，请重试');

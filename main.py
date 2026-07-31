@@ -625,9 +625,9 @@ async def _prepare_site_photos(photo_groups):
                 continue
             if upload.content_type and not upload.content_type.startswith('image/'):
                 raise HTTPException(status_code=400, detail="现场照片必须为图片文件")
-            content = await upload.read(200 * 1024 + 1)
-            if len(content) > 200 * 1024:
-                raise HTTPException(status_code=400, detail="现场照片压缩后不能超过 200KB")
+            content = await upload.read(500 * 1024 + 1)
+            if len(content) > 500 * 1024:
+                raise HTTPException(status_code=400, detail="现场照片压缩后不能超过 500KB")
             extension = os.path.splitext(upload.filename)[1].lower()
             if extension not in allowed_extensions:
                 extension = '.jpg'
@@ -2155,11 +2155,11 @@ async def save_welding_skill_exam(
     for photo in uploaded_photos:
         if photo.content_type and not photo.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="考试照片必须为图片文件")
-        content = await photo.read(200 * 1024 + 1)
+        content = await photo.read(500 * 1024 + 1)
         if not content:
             raise HTTPException(status_code=400, detail="存在空白考试照片，请重新拍摄")
-        if len(content) > 200 * 1024:
-            raise HTTPException(status_code=400, detail="考试照片压缩后不能超过200KB")
+        if len(content) > 500 * 1024:
+            raise HTTPException(status_code=400, detail="考试照片压缩后不能超过500KB")
         extension = os.path.splitext(photo.filename)[1].lower()
         prepared_photos.append((extension if extension in allowed_extensions else '.jpg', content))
 
@@ -2231,9 +2231,9 @@ async def complete_welding_ndt(
     for photo in uploaded_photos:
         if photo.content_type and not photo.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="探伤照片必须为图片文件")
-        content = await photo.read(200 * 1024 + 1)
-        if not content or len(content) > 200 * 1024:
-            raise HTTPException(status_code=400, detail="探伤照片压缩后必须小于200KB且不能为空")
+        content = await photo.read(500 * 1024 + 1)
+        if not content or len(content) > 500 * 1024:
+            raise HTTPException(status_code=400, detail="探伤照片压缩后必须小于500KB且不能为空")
         extension = os.path.splitext(photo.filename)[1].lower()
         prepared_photos.append((extension if extension in allowed_extensions else '.jpg', content))
 
