@@ -80,9 +80,9 @@ from app.config import DB_PATH, UPLOAD_DIR, TEMP_IDS_DIR, REDIS_URL, CARDS_DIR
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
 INFO_CARD_TEMPLATE = os.path.join(TEMPLATE_DIR, 'information_card.docx')
 CERTIFICATE_TEMPLATE = os.path.join(TEMPLATE_DIR, 'qualification_certificate.docx')
-# Uploads used in information cards are retained as original files.  This is a
-# safety limit only; it is not an image compression target.
-MAX_ORIGINAL_PHOTO_BYTES = 15 * 1024 * 1024
+# Every photo is compressed in the browser before upload.  The server enforces
+# the same 300KB ceiling so direct requests cannot introduce large originals.
+MAX_UPLOAD_PHOTO_BYTES = 300 * 1024
 
 def _download_filename(name, suffix):
     return f"{(name or '人员').strip()}{suffix}"
@@ -99,6 +99,15 @@ def _safe_photo_paths(value):
         return [p for p in json.loads(value or '[]') if isinstance(p, str) and os.path.exists(p)]
     except Exception:
         return []
+
+
+async def _read_compressed_photo(upload, label):
+    content = await upload.read(MAX_UPLOAD_PHOTO_BYTES + 1)
+    if not content:
+        raise HTTPException(status_code=400, detail=f"{label}不能为空")
+    if len(content) > MAX_UPLOAD_PHOTO_BYTES:
+        raise HTTPException(status_code=400, detail=f"{label}请先压缩至 300KB 以内")
+    return content
 
 def _row_value(row, key, default=''):
     try:
@@ -632,9 +641,7 @@ async def _prepare_site_photos(photo_groups):
                 continue
             if upload.content_type and not upload.content_type.startswith('image/'):
                 raise HTTPException(status_code=400, detail="现场照片必须为图片文件")
-            content = await upload.read(MAX_ORIGINAL_PHOTO_BYTES + 1)
-            if len(content) > MAX_ORIGINAL_PHOTO_BYTES:
-                raise HTTPException(status_code=400, detail="现场照片不能超过 15MB")
+            content = await _read_compressed_photo(upload, "现场照片")
             extension = os.path.splitext(upload.filename)[1].lower()
             if extension not in allowed_extensions:
                 extension = '.jpg'
@@ -1712,11 +1719,10 @@ async def api_ocr_idcard(file: UploadFile = File(...)):
         ext = '.jpg'
     temp_path = os.path.join(temp_ids_dir, f"ocr_raw_{uuid.uuid4().hex}{ext}").replace('\\', '/')
     try:
-        # S3: 限制上传文件大小为 10MB，防止 DoS
-        MAX_OCR_FILE_SIZE = 10 * 1024 * 1024
+        MAX_OCR_FILE_SIZE = MAX_UPLOAD_PHOTO_BYTES
         content = await file.read(MAX_OCR_FILE_SIZE + 1)
         if len(content) > MAX_OCR_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="图片文件大小不能超过10MB")
+            raise HTTPException(status_code=400, detail="身份证照片请先压缩至 300KB 以内")
 
         with open(temp_path, "wb") as f:
             f.write(content)
@@ -1745,6 +1751,11 @@ async def api_ocr_idcard(file: UploadFile = File(...)):
             result["id_card"] = result["id_number"]
             
         return {"code": 200, **result}
+    except HTTPException:
+        if os.path.exists(temp_path):
+            try: os.remove(temp_path)
+            except: pass
+        raise
     except Exception as e:
         if os.path.exists(temp_path):
             try: os.remove(temp_path)
@@ -1765,11 +1776,10 @@ async def submit_ocr_task(file: UploadFile = File(...)):
     temp_path = os.path.join(temp_ids_dir, temp_filename).replace('\\', '/')
     
     try:
-        # S3: 限制上传文件大小为 10MB，防止 DoS
-        MAX_OCR_FILE_SIZE = 10 * 1024 * 1024
+        MAX_OCR_FILE_SIZE = MAX_UPLOAD_PHOTO_BYTES
         content = await file.read(MAX_OCR_FILE_SIZE + 1)
         if len(content) > MAX_OCR_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="图片文件大小不能超过10MB")
+            raise HTTPException(status_code=400, detail="身份证照片请先压缩至 300KB 以内")
 
         with open(temp_path, "wb") as f:
             f.write(content)
@@ -1777,6 +1787,11 @@ async def submit_ocr_task(file: UploadFile = File(...)):
         from app.tasks import ocr_idcard_task
         task = ocr_idcard_task.delay(temp_path)
         return {"task_id": task.id}
+    except HTTPException:
+        if os.path.exists(temp_path):
+            try: os.remove(temp_path)
+            except: pass
+        raise
     except Exception as e:
         if os.path.exists(temp_path):
             try: os.remove(temp_path)
@@ -2001,17 +2016,13 @@ async def create_record(
     if not file_ext or file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="不支持的图片格式，仅允许 jpg, jpeg, png, gif")
         
-    # Keep the original headshot for information-card generation.
-    content = await photo.read(MAX_ORIGINAL_PHOTO_BYTES + 1)
-    if len(content) > MAX_ORIGINAL_PHOTO_BYTES:
-        raise HTTPException(status_code=400, detail="照片文件大小不能超过 15MB")
-    await photo.seek(0)
+    content = await _read_compressed_photo(photo, "大头照")
     
     filename = f"{current_user['id']}_{int(datetime.now().timestamp())}{file_ext}"
     photo_path = os.path.join(UPLOAD_DIR, filename).replace('\\', '/')
     
     with open(photo_path, "wb") as f:
-        shutil.copyfileobj(photo.file, f)
+        f.write(content)
         
     # 插入记录
     conn = sqlite3.connect(DB_PATH)
@@ -2176,11 +2187,7 @@ async def save_welding_skill_exam(
     for photo in uploaded_photos:
         if photo.content_type and not photo.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="考试照片必须为图片文件")
-        content = await photo.read(MAX_ORIGINAL_PHOTO_BYTES + 1)
-        if not content:
-            raise HTTPException(status_code=400, detail="存在空白考试照片，请重新拍摄")
-        if len(content) > MAX_ORIGINAL_PHOTO_BYTES:
-            raise HTTPException(status_code=400, detail="考试照片不能超过15MB")
+        content = await _read_compressed_photo(photo, "考试照片")
         extension = os.path.splitext(photo.filename)[1].lower()
         prepared_photos.append((extension if extension in allowed_extensions else '.jpg', content))
 
@@ -2252,9 +2259,7 @@ async def complete_welding_ndt(
     for photo in uploaded_photos:
         if photo.content_type and not photo.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="探伤照片必须为图片文件")
-        content = await photo.read(MAX_ORIGINAL_PHOTO_BYTES + 1)
-        if not content or len(content) > MAX_ORIGINAL_PHOTO_BYTES:
-            raise HTTPException(status_code=400, detail="探伤照片不能为空且不能超过15MB")
+        content = await _read_compressed_photo(photo, "探伤照片")
         extension = os.path.splitext(photo.filename)[1].lower()
         prepared_photos.append((extension if extension in allowed_extensions else '.jpg', content))
 
@@ -2407,13 +2412,14 @@ async def update_record(
         # 2. 如果用户上传了新照片，保存为临时文件以供审批
         temp_photo_path = record['photo_path']
         if photo and photo.filename:
+            photo_content = await _read_compressed_photo(photo, "大头照")
             file_ext = os.path.splitext(photo.filename)[1].lower()
             if not file_ext:
                 file_ext = '.jpg'
             filename = f"temp_update_record_{record_id}_{int(datetime.now().timestamp())}{file_ext}"
             temp_photo_path = os.path.join(UPLOAD_DIR, filename).replace('\\', '/')
             with open(temp_photo_path, "wb") as f:
-                shutil.copyfileobj(photo.file, f)
+                f.write(photo_content)
         
         # 3. 身份证照临时裁剪路径暂存
         temp_id_card_img_path = None
@@ -2442,6 +2448,7 @@ async def update_record(
     photo_path = record['photo_path']
     old_photo_path = None
     if photo and photo.filename:
+        photo_content = await _read_compressed_photo(photo, "大头照")
         # 保存新照片
         file_ext = os.path.splitext(photo.filename)[1]
         if not file_ext:
@@ -2450,7 +2457,7 @@ async def update_record(
         new_photo_path = os.path.join(UPLOAD_DIR, filename).replace('\\', '/')
         
         with open(new_photo_path, "wb") as f:
-            shutil.copyfileobj(photo.file, f)
+            f.write(photo_content)
             
         old_photo_path = photo_path
         photo_path = new_photo_path
@@ -2563,6 +2570,7 @@ async def admin_update_record(
         
     photo_path = record['photo_path']
     if photo and photo.filename:
+        photo_content = await _read_compressed_photo(photo, "大头照")
         # 保存新照片
         file_ext = os.path.splitext(photo.filename)[1]
         if not file_ext:
@@ -2571,7 +2579,7 @@ async def admin_update_record(
         new_photo_path = os.path.join(UPLOAD_DIR, filename).replace('\\', '/')
         
         with open(new_photo_path, "wb") as f:
-            shutil.copyfileobj(photo.file, f)
+            f.write(photo_content)
             
         # 尝试删除旧照片
         if photo_path and os.path.exists(photo_path):

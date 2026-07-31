@@ -23,7 +23,7 @@
     <input id="photo-album-input" type="file" accept="image/*" hidden>
     <div class="photo-collection" id="photo-collection"><button class="add-photo" id="capture-button" type="button" aria-label="拍摄探伤照片" disabled>+</button></div>
     <div class="photo-source-choice" id="photo-source-choice"><button type="button" id="choose-camera">📷 拍照</button><button type="button" id="choose-album">📂 从相册选择</button></div>
-    <p class="photo-hint">探伤照片可重复添加多张，系统保留原图，不进行压缩。</p>
+    <p class="photo-hint">探伤照片可重复添加多张，每张会压缩至 300KB 内。</p>
     <button class="confirm" id="confirm" type="button" disabled>确认本次探伤照片</button>
     <div class="confirmed-note" id="confirmed-note">照片已确认，请选择探伤结果。</div>
     <div class="ndt-result-actions" id="ndt-result-actions"><button class="complete" id="complete-qualified" type="button">合格</button><button class="complete unqualified" id="complete-unqualified" type="button">不合格</button></div><p class="notice" id="notice"></p>
@@ -40,9 +40,61 @@
     function bindCaptureButton() { const button = document.getElementById('capture-button'); if (button) button.addEventListener('click', () => { if (!confirmed) photoSourceChoice.classList.add('visible'); }); }
     function renderPhotos() { const collection = document.getElementById('photo-collection'); confirmButton.disabled = !photos.length || confirmed; collection.innerHTML = photos.map((photo, index) => `<div class="thumb"><img src="${photo.url}" alt="探伤照片 ${index + 1}"><button type="button" aria-label="删除第${index + 1}张照片" onclick="removePhoto(${index})">×</button></div>`).join('') + `<button class="add-photo" id="capture-button" type="button" aria-label="拍摄探伤照片" ${confirmed || photos.length >= 60 ? 'disabled' : ''}>+</button>`; bindCaptureButton(); }
     function removePhoto(index) { if (confirmed) return; const [removed] = photos.splice(index, 1); if (removed) URL.revokeObjectURL(removed.url); renderPhotos(); }
-    function originalImageFilename(file, fallback) { return /\.(jpe?g|png)$/i.test(file.name || '') ? file.name : fallback; }
-    async function prepareImageFile(file) { if (!file.type.startsWith('image/')) throw new Error('所选文件不是有效的图片'); return file; }
-    async function addPhoto(event) { const file=event.target.files&&event.target.files[0]; event.target.value=''; if(!file||confirmed)return; if(photos.length>=60){setNotice('一次探伤最多拍摄60张照片。','error');return;} const button=document.getElementById('capture-button'); if(button)button.disabled=true; try{const blob=await prepareImageFile(file);photos.push({blob,filename:originalImageFilename(file,'ndt.jpg'),url:URL.createObjectURL(blob)});renderPhotos();setNotice(`已添加第 ${photos.length} 张探伤照片。`,'success');}catch(error){setNotice(error.message||'拍摄失败，请重试。','error');}finally{const latestButton=document.getElementById('capture-button');if(latestButton&&!confirmed)latestButton.disabled=false;} }
+    async function loadImageSource(file) {
+      if (typeof createImageBitmap === 'function') return createImageBitmap(file);
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => { image.__sourceUrl = url; resolve(image); };
+        image.onerror = () => { URL.revokeObjectURL(url); reject(new Error('照片读取失败，请重新拍摄')); };
+        image.src = url;
+      });
+    }
+    function releaseImageSource(source) { if (typeof source.close === 'function') source.close(); if (source.__sourceUrl) URL.revokeObjectURL(source.__sourceUrl); }
+    async function prepareImageFile(file) {
+      if (!file.type.startsWith('image/')) throw new Error('所选文件不是有效的图片');
+      const source = await loadImageSource(file);
+      const maxBytes = 300 * 1024;
+      let scale = Math.max(source.width, source.height) > 1600 ? 1600 / Math.max(source.width, source.height) : 1;
+      let bestBlob = null;
+      for (let sizeAttempt = 0; sizeAttempt < 4; sizeAttempt++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(source.width * scale));
+        canvas.height = Math.max(1, Math.round(source.height * scale));
+        canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
+        let low = .05, high = 1;
+        for (let qualityAttempt = 0; qualityAttempt < 8; qualityAttempt++) {
+          const quality = (low + high) / 2;
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+          if (!blob) throw new Error('照片压缩失败，请重新拍摄');
+          bestBlob = blob;
+          if (blob.size <= maxBytes) { releaseImageSource(source); return blob; }
+          high = quality;
+        }
+        scale *= .75;
+      }
+      releaseImageSource(source);
+      if (!bestBlob) throw new Error('照片压缩失败，请重新拍摄');
+      return bestBlob;
+    }
+    async function addPhoto(event) {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file || confirmed) return;
+      if (photos.length >= 60) { setNotice('一次探伤最多拍摄60张照片。', 'error'); return; }
+      const button = document.getElementById('capture-button');
+      if (button) button.disabled = true;
+      try {
+        const blob = await prepareImageFile(file);
+        photos.push({ blob, filename: 'ndt.jpg', url: URL.createObjectURL(blob) });
+        renderPhotos();
+        setNotice(`已添加第 ${photos.length} 张探伤照片（${Math.ceil(blob.size / 1024)}KB）。`, 'success');
+      } catch (error) { setNotice(error.message || '拍摄失败，请重试。', 'error'); }
+      finally {
+        const latestButton = document.getElementById('capture-button');
+        if (latestButton && !confirmed) latestButton.disabled = false;
+      }
+    }
     function confirmPhotos(){if(!photos.length)return;confirmed=true;renderPhotos();document.getElementById('confirmed-note').style.display='block';resultActions.classList.add('visible');setNotice(`已确认 ${photos.length} 张探伤照片。`,'success');}
     async function submitNdt(result){ const formData=new FormData(); formData.append('record_id',String(recordId)); formData.append('result',result); photos.forEach((photo,index)=>formData.append('photos',photo.blob,photo.filename||`ndt_${index+1}.jpg`));document.getElementById('saving').classList.add('visible');try{const response=await fetch('/api/welding-skill-exam/ndt',{method:'POST',headers:{Authorization:token},body:formData});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.detail||'探伤保存失败，请重试');setNotice(result==='qualified'?'探伤合格已保存。':'探伤不合格已保存。','success');setTimeout(()=>location.replace(`/client?tab=history&refresh=${Date.now()}`),900);}catch(error){setNotice(error.message||'探伤保存失败，请重试。','error');}finally{document.getElementById('saving').classList.remove('visible');}}
     if(!token||role==='admin'||!recordId||recordId<1){document.getElementById('capture-button').disabled=true;setNotice('探伤仅可由对应的注册用户从历史记录页面进入。','error');}else{document.getElementById('capture-button').disabled=false;bindCaptureButton();} document.getElementById('choose-camera').addEventListener('click',()=>{hidePhotoSourceChoice();cameraInput.click();});document.getElementById('choose-album').addEventListener('click',()=>{hidePhotoSourceChoice();albumInput.click();});cameraInput.addEventListener('change',addPhoto);albumInput.addEventListener('change',addPhoto);confirmButton.addEventListener('click',confirmPhotos);document.getElementById('complete-qualified').addEventListener('click',()=>submitNdt('qualified'));document.getElementById('complete-unqualified').addEventListener('click',()=>submitNdt('unqualified'));

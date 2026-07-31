@@ -51,7 +51,7 @@
     <div class="photo-collection" id="photo-collection">
       <button class="add-photo" id="capture-button" type="button" aria-label="拍摄考试照片" disabled>+</button>
     </div>
-    <p class="photo-hint">点击“+”拍一张考试过程照片，可重复添加多张。</p>
+    <p class="photo-hint">点击“+”拍一张考试过程照片，可重复添加多张；每张会压缩至 300KB 内。</p>
     <button class="confirm-photos" id="confirm-photos" type="button" disabled>确认本次拍摄照片</button>
     <div class="confirmed-note" id="confirmed-note">照片已确认，请选择考试结果。</div>
 
@@ -102,13 +102,47 @@
       if (removed) URL.revokeObjectURL(removed.url);
       updatePhotoList();
     }
-    function originalImageFilename(file, fallback) {
-      return /\.(jpe?g|png)$/i.test(file.name || '') ? file.name : fallback;
+    async function loadImageSource(file) {
+      if (typeof createImageBitmap === 'function') return createImageBitmap(file);
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => { image.__sourceUrl = url; resolve(image); };
+        image.onerror = () => { URL.revokeObjectURL(url); reject(new Error('照片读取失败，请重新拍摄')); };
+        image.src = url;
+      });
     }
-
+    function releaseImageSource(source) {
+      if (typeof source.close === 'function') source.close();
+      if (source.__sourceUrl) URL.revokeObjectURL(source.__sourceUrl);
+    }
     async function prepareImageFile(file) {
       if (!file.type.startsWith('image/')) throw new Error('所选文件不是有效的图片');
-      return file;
+      const source = await loadImageSource(file);
+      const maxBytes = 300 * 1024;
+      let width = source.width, height = source.height, scale = 1, bestBlob = null;
+      if (Math.max(width, height) > 1600) {
+        scale = 1600 / Math.max(width, height);
+      }
+      for (let sizeAttempt = 0; sizeAttempt < 4; sizeAttempt++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
+        let low = 0.05, high = 1;
+        for (let qualityAttempt = 0; qualityAttempt < 8; qualityAttempt++) {
+          const quality = (low + high) / 2;
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+          if (!blob) throw new Error('照片压缩失败，请重新拍摄');
+          bestBlob = blob;
+          if (blob.size <= maxBytes) { releaseImageSource(source); return blob; }
+          high = quality;
+        }
+        scale *= 0.75;
+      }
+      releaseImageSource(source);
+      if (!bestBlob) throw new Error('照片压缩失败，请重新拍摄');
+      return bestBlob;
     }
     async function handleSelectedPhoto(event) {
       const file = event.target.files && event.target.files[0];
@@ -119,9 +153,9 @@
       if (activeCaptureButton) activeCaptureButton.disabled = true;
       try {
         const blob = await prepareImageFile(file);
-        photos.push({ blob, filename: originalImageFilename(file, 'welding_exam.jpg'), url: URL.createObjectURL(blob) });
+        photos.push({ blob, filename: 'welding_exam.jpg', url: URL.createObjectURL(blob) });
         updatePhotoList();
-        setNotice(`已保存第 ${photos.length} 张照片，可继续拍摄。`, 'success');
+        setNotice(`已保存第 ${photos.length} 张照片（${Math.ceil(blob.size / 1024)}KB），可继续拍摄。`, 'success');
       } catch (error) { setNotice(error.message || '拍摄失败，请重试。', 'error'); }
       finally {
         const latestCaptureButton = document.getElementById('capture-button');

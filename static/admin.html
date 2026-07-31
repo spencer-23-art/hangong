@@ -2839,7 +2839,7 @@
         const img = new Image();
         img.onload = async function() {
           let scale = 1.0;
-          const MAX_PIXELS = 1800;
+          const MAX_PIXELS = 1600;
           let w = img.width;
           let h = img.height;
           if (w > h) {
@@ -3081,7 +3081,7 @@
     function handleDetailPhotoChange(e) {
       const file = e.target.files[0];
       if (file) {
-        compressImageFile(file, 500, (blob) => {
+        compressImageFile(file, 300, (blob) => {
           window._detailPhotoBlob = blob;
           const reader = new FileReader();
           reader.onload = function(evt) {
@@ -3099,7 +3099,7 @@
     function handleDetailIdCardFile(event) {
       const file = event.target.files[0];
       if (file) {
-        compressImageFile(file, 500, (blob) => {
+        compressImageFile(file, 300, (blob) => {
           uploadDetailIdCardBlob(blob);
         });
       }

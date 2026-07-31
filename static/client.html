@@ -763,7 +763,7 @@
         const img = new Image();
         img.onload = async function() {
           let scale = 1.0;
-          const MAX_PIXELS = 1800;
+          const MAX_PIXELS = 1600;
           let w = img.width;
           let h = img.height;
           if (w > h) {
@@ -1410,12 +1410,16 @@
 
       const placeholder = document.getElementById('uploader-placeholder');
       const preview = document.getElementById('photo-preview');
-      compressedPhotoBlob = file;
-      compressedPhotoFilename = originalImageFilename(file, 'photo.jpg');
-      preview.src = URL.createObjectURL(file);
-      preview.style.display = 'block';
-      placeholder.style.display = 'none';
-      showAlert('success', `已保留原图：${(file.size / 1024 / 1024).toFixed(2)}MB`);
+      placeholder.innerHTML = '<p>正在压缩照片...</p>';
+      compressImageFile(file, 300, (blob) => {
+        if (!blob) { showAlert('error', '照片压缩失败，请重新选择。'); return; }
+        compressedPhotoBlob = blob;
+        compressedPhotoFilename = 'photo.jpg';
+        preview.src = URL.createObjectURL(blob);
+        preview.style.display = 'block';
+        placeholder.style.display = 'none';
+        showAlert('success', `照片已压缩至 ${(blob.size / 1024).toFixed(0)}KB`);
+      });
     }
 
     function renderSitePhotoGroup(groupIndex) {
@@ -1468,7 +1472,12 @@
       if (!file.type.startsWith('image/')) {
         return Promise.reject(new Error('所选文件不是有效的图片'));
       }
-      return Promise.resolve(file);
+      return new Promise((resolve, reject) => {
+        compressImageFile(file, 300, (blob) => {
+          if (!blob) { reject(new Error('照片压缩失败，请重新选择')); return; }
+          resolve(blob);
+        });
+      });
     }
 
     async function handleSitePhotos(event, groupIndex) {
@@ -1478,15 +1487,15 @@
 
       const placeholder = document.getElementById(`site-photo-placeholder-${groupIndex + 1}`);
       placeholder.style.display = 'flex';
-      placeholder.innerHTML = '<p>正在读取原图，不进行压缩...</p>';
+      placeholder.innerHTML = '<p>正在压缩照片...</p>';
 
       try {
         for (const file of files) {
           const blob = await prepareSitePhoto(file);
-          sitePhotoGroups[groupIndex].push({ blob, filename: originalImageFilename(file, 'site_photo.jpg'), url: URL.createObjectURL(blob) });
+          sitePhotoGroups[groupIndex].push({ blob, filename: 'site_photo.jpg', url: URL.createObjectURL(blob) });
         }
         renderSitePhotoGroup(groupIndex);
-        showAlert('success', `现场照片已添加 ${files.length} 张，已保留原图质量`);
+        showAlert('success', `现场照片已添加 ${files.length} 张，均已压缩至 300KB 内`);
       } catch (err) {
         renderSitePhotoGroup(groupIndex);
         showAlert('error', err.message || '现场照片读取失败，请重试');
@@ -1719,7 +1728,7 @@
         const submitBtn = document.getElementById('btn-submit');
         submitBtn.disabled = true;
         submitBtn.innerText = '正在压缩身份证图片...';
-        compressImageFile(file, 500, (blob) => {
+        compressImageFile(file, 300, (blob) => {
           uploadIdCardBlob(blob);
         });
       }
