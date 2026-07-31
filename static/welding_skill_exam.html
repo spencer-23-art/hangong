@@ -51,7 +51,7 @@
     <div class="photo-collection" id="photo-collection">
       <button class="add-photo" id="capture-button" type="button" aria-label="拍摄考试照片" disabled>+</button>
     </div>
-    <p class="photo-hint">点击“+”拍一张考试过程照片，可重复添加多张；每张会压缩至 300KB 内。</p>
+    <p class="photo-hint">点击“+”拍一张考试过程照片，可重复添加多张。</p>
     <button class="confirm-photos" id="confirm-photos" type="button" disabled>确认本次拍摄照片</button>
     <div class="confirmed-note" id="confirmed-note">照片已确认，请选择考试结果。</div>
 
@@ -155,7 +155,7 @@
         const blob = await prepareImageFile(file);
         photos.push({ blob, filename: 'welding_exam.jpg', url: URL.createObjectURL(blob) });
         updatePhotoList();
-        setNotice(`已保存第 ${photos.length} 张照片（${Math.ceil(blob.size / 1024)}KB），可继续拍摄。`, 'success');
+        setNotice(`已保存第 ${photos.length} 张照片，可继续拍摄。`, 'success');
       } catch (error) { setNotice(error.message || '拍摄失败，请重试。', 'error'); }
       finally {
         const latestCaptureButton = document.getElementById('capture-button');

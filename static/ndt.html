@@ -23,7 +23,7 @@
     <input id="photo-album-input" type="file" accept="image/*" hidden>
     <div class="photo-collection" id="photo-collection"><button class="add-photo" id="capture-button" type="button" aria-label="拍摄探伤照片" disabled>+</button></div>
     <div class="photo-source-choice" id="photo-source-choice"><button type="button" id="choose-camera">📷 拍照</button><button type="button" id="choose-album">📂 从相册选择</button></div>
-    <p class="photo-hint">探伤照片可重复添加多张，每张会压缩至 300KB 内。</p>
+    <p class="photo-hint">探伤照片可重复添加多张。</p>
     <button class="confirm" id="confirm" type="button" disabled>确认本次探伤照片</button>
     <div class="confirmed-note" id="confirmed-note">照片已确认，请选择探伤结果。</div>
     <div class="ndt-result-actions" id="ndt-result-actions"><button class="complete" id="complete-qualified" type="button">合格</button><button class="complete unqualified" id="complete-unqualified" type="button">不合格</button></div><p class="notice" id="notice"></p>
@@ -88,7 +88,7 @@
         const blob = await prepareImageFile(file);
         photos.push({ blob, filename: 'ndt.jpg', url: URL.createObjectURL(blob) });
         renderPhotos();
-        setNotice(`已添加第 ${photos.length} 张探伤照片（${Math.ceil(blob.size / 1024)}KB）。`, 'success');
+        setNotice(`已添加第 ${photos.length} 张探伤照片。`, 'success');
       } catch (error) { setNotice(error.message || '拍摄失败，请重试。', 'error'); }
       finally {
         const latestButton = document.getElementById('capture-button');
