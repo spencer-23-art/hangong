@@ -45,7 +45,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import openpyxl
 import csv
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 from docx import Document
 from docx.shared import Cm
 from docx.oxml.ns import qn
