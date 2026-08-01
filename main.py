@@ -179,7 +179,8 @@ def _replace_image_placeholder(paragraph, placeholder, image_paths, max_height_c
         # Writer applies additional internal table margins that python-docx does
         # not expose. Reserve part of the declared cell width so a row of photos
         # never wraps and stretches the information-card template.
-        usable_width_cm = max(0.6, (cell_width_cm - 0.18) * 0.78)
+        layout_safety = 0.70 if len(valid_paths) > 1 else 0.96
+        usable_width_cm = max(0.6, (cell_width_cm - 0.18) * layout_safety)
         max_width_cm = max(0.45, usable_width_cm / len(valid_paths))
 
         for image_path in valid_paths:
