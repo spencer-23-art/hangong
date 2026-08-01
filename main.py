@@ -158,47 +158,51 @@ def _replace_text_placeholder(paragraph, placeholder, value):
         _set_template_value_font(run)
     return True
 
-def _replace_image_placeholder(paragraph, placeholder, image_path, width_cm):
+def _replace_image_placeholder(paragraph, placeholder, image_paths, max_height_cm):
     if placeholder not in paragraph.text:
         return False
-    if not image_path or not os.path.exists(image_path):
+
+    if isinstance(image_paths, str):
+        image_paths = [image_paths]
+    valid_paths = [path for path in (image_paths or []) if path and os.path.exists(path)]
+    if not valid_paths:
         return _replace_text_placeholder(paragraph, placeholder, '')
     if paragraph.text.strip() == placeholder:
         for run in paragraph.runs:
             run.text = ''
-        paragraph.add_run().add_picture(image_path, width=Cm(width_cm))
+
+        # Keep every source photo as its own inline picture.  This preserves the
+        # template table and avoids the artificial white background introduced by
+        # the former contact-sheet image.
+        cell = getattr(paragraph, '_parent', None)
+        cell_width_cm = getattr(getattr(cell, 'width', None), 'cm', 0) or 0
+        usable_width_cm = max(0.6, cell_width_cm - 0.18)
+        gap_cm = 0.08 if len(valid_paths) > 1 else 0
+        max_width_cm = max(0.45, (usable_width_cm - gap_cm * (len(valid_paths) - 1)) / len(valid_paths))
+
+        for index, image_path in enumerate(valid_paths):
+            try:
+                with Image.open(image_path) as source:
+                    image = ImageOps.exif_transpose(source)
+                    image_width, image_height = image.size
+            except Exception:
+                continue
+            if image_width <= 0 or image_height <= 0:
+                continue
+
+            aspect_ratio = image_width / image_height
+            width_cm = min(max_width_cm, max_height_cm * aspect_ratio)
+            height_cm = width_cm / aspect_ratio
+            # The cell's available width is the hard limit.  Height is capped by
+            # its reserved template row so adding photos never stretches the table.
+            if height_cm > max_height_cm:
+                height_cm = max_height_cm
+                width_cm = height_cm * aspect_ratio
+            if index:
+                paragraph.add_run(' ')
+            paragraph.add_run().add_picture(image_path, width=Cm(width_cm), height=Cm(height_cm))
         return True
     return _replace_text_placeholder(paragraph, placeholder, '')
-
-def _build_photo_sheet(paths, work_dir, name):
-    images = []
-    for path in paths:
-        if not path or not os.path.exists(path):
-            continue
-        try:
-            with Image.open(path) as source:
-                images.append(source.convert('RGB').copy())
-        except Exception:
-            continue
-    if not images:
-        return ''
-    images = images[:6]
-    columns = min(3, len(images))
-    rows = (len(images) + columns - 1) // columns
-    # The previous 420x300 JPEG contact sheet threw away most of the detail
-    # before LibreOffice ever received the image.  Keep a print-ready sheet
-    # and save it losslessly so the information-card PDF starts with the best
-    # available source quality.
-    cell_width, cell_height = 1200, 900
-    sheet = Image.new('RGB', (columns * cell_width, rows * cell_height), 'white')
-    for index, image in enumerate(images):
-        image.thumbnail((cell_width - 12, cell_height - 12), Image.Resampling.LANCZOS)
-        x = (index % columns) * cell_width + (cell_width - image.width) // 2
-        y = (index // columns) * cell_height + (cell_height - image.height) // 2
-        sheet.paste(image, (x, y))
-    path = os.path.join(work_dir, f"{name}.png")
-    sheet.save(path, 'PNG', compress_level=0)
-    return path
 
 def _convert_docx_to_pdf(source_docx, output_dir):
     profile_dir = os.path.join(output_dir, 'libreoffice-profile')
@@ -222,9 +226,9 @@ def _fill_template(template_path, output_docx, text_values, image_values, trim_t
         for paragraph in paragraphs:
             if _replace_text_placeholder(paragraph, placeholder, value):
                 found.add(placeholder)
-    for placeholder, (image_path, width_cm) in image_values.items():
+    for placeholder, (image_paths, max_height_cm) in image_values.items():
         for paragraph in paragraphs:
-            if _replace_image_placeholder(paragraph, placeholder, image_path, width_cm):
+            if _replace_image_placeholder(paragraph, placeholder, image_paths, max_height_cm):
                 found.add(placeholder)
     required = set(text_values) | set(image_values)
     missing = required - found
@@ -283,16 +287,19 @@ def _information_card_values(record, exam, work_dir):
         '<jl>': _exam_conclusion(exam),
     }
     image_values = {
-        '<dtz>': (_row_value(record, 'photo_path'), 3.0),
-        '<hgz>': (_build_photo_sheet(groups.get('1', []), work_dir, 'welder_certificate'), 5.3),
-        '<tzryzyz>': (_build_photo_sheet(groups.get('2', []), work_dir, 'special_operation_certificate'), 5.3),
-        '<hjks>': (_build_photo_sheet(exam_photos, work_dir, 'welding_exam'), 12.5),
-        '<tszp>': (_build_photo_sheet(ndt_photos, work_dir, 'ndt'), 12.5),
+        # Heights correspond to the template's reserved table rows.  The insert
+        # helper obtains each cell width from the template and keeps every photo
+        # within that cell instead of changing the table geometry.
+        '<dtz>': ([_row_value(record, 'photo_path')], 4.4),
+        '<hgz>': (groups.get('1', []), 2.7),
+        '<tzryzyz>': (groups.get('2', []), 2.7),
+        '<hjks>': (exam_photos, 2.9),
+        '<tszp>': (ndt_photos, 2.5),
         # Keep the issued certificate inside the bottom <hgk> cell of the one-page information card.
         # The template reserves a 2,204-twip (about 3.9 cm) row for <hgk>.
         # Keeping the image below that height prevents Word from moving the whole
         # row to a second page while retaining the supplied template's layout.
-        '<hgk>': (certificate_path if certificate_path and os.path.exists(certificate_path) else '', 3.5),
+        '<hgk>': ([certificate_path] if certificate_path and os.path.exists(certificate_path) else [], 3.5),
     }
     return text_values, image_values
 
