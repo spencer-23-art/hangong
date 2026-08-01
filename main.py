@@ -176,11 +176,13 @@ def _replace_image_placeholder(paragraph, placeholder, image_paths, max_height_c
         # the former contact-sheet image.
         cell = getattr(paragraph, '_parent', None)
         cell_width_cm = getattr(getattr(cell, 'width', None), 'cm', 0) or 0
-        usable_width_cm = max(0.6, cell_width_cm - 0.18)
-        gap_cm = 0.08 if len(valid_paths) > 1 else 0
-        max_width_cm = max(0.45, (usable_width_cm - gap_cm * (len(valid_paths) - 1)) / len(valid_paths))
+        # Writer applies additional internal table margins that python-docx does
+        # not expose. Reserve part of the declared cell width so a row of photos
+        # never wraps and stretches the information-card template.
+        usable_width_cm = max(0.6, (cell_width_cm - 0.18) * 0.78)
+        max_width_cm = max(0.45, usable_width_cm / len(valid_paths))
 
-        for index, image_path in enumerate(valid_paths):
+        for image_path in valid_paths:
             try:
                 with Image.open(image_path) as source:
                     image = ImageOps.exif_transpose(source)
@@ -198,8 +200,6 @@ def _replace_image_placeholder(paragraph, placeholder, image_paths, max_height_c
             if height_cm > max_height_cm:
                 height_cm = max_height_cm
                 width_cm = height_cm * aspect_ratio
-            if index:
-                paragraph.add_run(' ')
             paragraph.add_run().add_picture(image_path, width=Cm(width_cm), height=Cm(height_cm))
         return True
     return _replace_text_placeholder(paragraph, placeholder, '')
