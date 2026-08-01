@@ -1180,7 +1180,10 @@
 
   <!-- 图片放大查看模态框 -->
   <div id="img-modal" class="modal" onclick="closeModal()">
-    <img id="modal-img" class="modal-content" src="">
+    <button type="button" id="img-prev" onclick="event.stopPropagation(); changeZoomImage(-1)" style="display:none;position:absolute;left:14px;z-index:1;border:0;border-radius:50%;width:42px;height:42px;background:rgba(0,0,0,.6);color:#fff;font-size:28px;">‹</button>
+    <img id="modal-img" class="modal-content" src="" onclick="event.stopPropagation()">
+    <button type="button" id="img-next" onclick="event.stopPropagation(); changeZoomImage(1)" style="display:none;position:absolute;right:14px;z-index:1;border:0;border-radius:50%;width:42px;height:42px;background:rgba(0,0,0,.6);color:#fff;font-size:28px;">›</button>
+    <span id="img-counter" style="display:none;position:absolute;bottom:18px;color:#fff;background:rgba(0,0,0,.6);padding:4px 10px;border-radius:12px;font-size:.8rem;"></span>
   </div>
 
   <!-- 修改用户模态框 -->
@@ -2343,7 +2346,7 @@
 
     function renderAdminHistoryPhotoItem(label, photoUrls) {
       const content = photoUrls.length
-        ? photoUrls.map(url => `<button type="button" class="admin-history-photo-button" onclick="zoomImage(this.querySelector('img').src)"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" onerror="this.closest('.admin-history-photo-button').remove()"></button>`).join('')
+        ? photoUrls.map(url => `<button type="button" class="admin-history-photo-button" onclick="zoomImageFromButton(this)"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" onerror="this.closest('.admin-history-photo-button').remove()"></button>`).join('')
         : '<span class="admin-history-photo-empty">暂无照片</span>';
       return `<div class="admin-history-photo-item"><span class="admin-history-photo-label">${escapeHtml(label)}</span><div class="admin-history-photo-images">${content}</div></div>`;
     }
@@ -2811,16 +2814,51 @@
     }
 
     // 辅助函数：放大照片
-    function zoomImage(src) {
+    let zoomPhotos = [];
+    let zoomPhotoIndex = 0;
+    function updateZoomImage() {
       const modal = document.getElementById('img-modal');
       const modalImg = document.getElementById('modal-img');
-      modalImg.src = src;
+      const multiple = zoomPhotos.length > 1;
+      modalImg.src = zoomPhotos[zoomPhotoIndex] || '';
+      document.getElementById('img-prev').style.display = multiple ? 'block' : 'none';
+      document.getElementById('img-next').style.display = multiple ? 'block' : 'none';
+      const counter = document.getElementById('img-counter');
+      counter.style.display = multiple ? 'block' : 'none';
+      counter.textContent = `${zoomPhotoIndex + 1} / ${zoomPhotos.length}`;
+    }
+    function zoomImage(src, photos = [src], index = 0) {
+      const modal = document.getElementById('img-modal');
+      zoomPhotos = (Array.isArray(photos) ? photos : [src]).filter(Boolean);
+      zoomPhotoIndex = Math.max(0, zoomPhotos.indexOf(src));
+      if (Number.isInteger(index) && index >= 0 && index < zoomPhotos.length) zoomPhotoIndex = index;
       modal.style.display = 'flex';
+      updateZoomImage();
+    }
+    function zoomImageFromButton(button) {
+      const images = Array.from(button.parentElement.querySelectorAll('img')).map(image => image.currentSrc || image.src).filter(Boolean);
+      zoomImage(button.querySelector('img').currentSrc || button.querySelector('img').src, images, Array.from(button.parentElement.querySelectorAll('button')).indexOf(button));
+    }
+    function changeZoomImage(step) {
+      if (zoomPhotos.length < 2) return;
+      zoomPhotoIndex = (zoomPhotoIndex + step + zoomPhotos.length) % zoomPhotos.length;
+      updateZoomImage();
     }
 
     function closeModal() {
       document.getElementById('img-modal').style.display = 'none';
     }
+    (() => {
+      let startX = null;
+      const modal = document.getElementById('img-modal');
+      modal.addEventListener('touchstart', event => { startX = event.changedTouches[0].clientX; }, { passive: true });
+      modal.addEventListener('touchend', event => {
+        if (startX === null) return;
+        const distance = event.changedTouches[0].clientX - startX;
+        startX = null;
+        if (Math.abs(distance) >= 42) changeZoomImage(distance < 0 ? 1 : -1);
+      }, { passive: true });
+    })();
 
     // ================== 新增：人员培训记录详情 & 修改 (Requirement 2) ==================
     window._detailPhotoBlob = null;
@@ -3048,7 +3086,7 @@
         }
         container.innerHTML = photos.map((path, photoIndex) => {
           const url = adminPhotoUrl(path);
-          return `<button type="button" onclick="zoomImage(${JSON.stringify(url)})" title="查看照片 ${photoIndex + 1}"><img src="${escapeHtml(url)}" alt="证件照片 ${photoIndex + 1}"></button>`;
+          return `<button type="button" onclick="zoomImageFromButton(this)" title="查看照片 ${photoIndex + 1}"><img src="${escapeHtml(url)}" alt="证件照片 ${photoIndex + 1}"></button>`;
         }).join('');
       });
     }
@@ -3071,7 +3109,7 @@
         visibleGroups += 1;
         preview.innerHTML = paths.map((path, index) => {
           const url = adminPhotoUrl(path);
-          return `<button type="button" onclick="zoomImage(${JSON.stringify(url)})" title="查看照片 ${index + 1}"><img src="${escapeHtml(url)}" alt="考核照片 ${index + 1}"></button>`;
+          return `<button type="button" onclick="zoomImageFromButton(this)" title="查看照片 ${index + 1}"><img src="${escapeHtml(url)}" alt="考核照片 ${index + 1}"></button>`;
         }).join('');
       });
       const row = document.getElementById('detail-assessment-photo-row');

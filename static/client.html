@@ -511,7 +511,7 @@
               </div>
               <div class="photo-uploader-placeholder" id="site-photo-placeholder-1">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <p>焊工证<br>可连续拍摄多张</p>
+                <p>应急管理局磁卡</p>
               </div>
               <div id="site-photo-preview-1" class="multi-photo-preview"></div>
             </div>
@@ -524,7 +524,7 @@
               </div>
               <div class="photo-uploader-placeholder" id="site-photo-placeholder-2">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <p>特种作业人员证<br>可连续拍摄多张</p>
+                <p>市场管理局绿本</p>
               </div>
               <div id="site-photo-preview-2" class="multi-photo-preview"></div>
             </div>
@@ -628,7 +628,10 @@
 
   <!-- 图片放大预览模态框 -->
   <div id="image-modal" class="modal" onclick="closeModal()">
-    <img class="modal-content" id="modal-img">
+    <button type="button" id="image-prev" onclick="event.stopPropagation(); changePreviewImage(-1)" style="display:none;position:absolute;left:14px;z-index:1;border:0;border-radius:50%;width:42px;height:42px;background:rgba(0,0,0,.6);color:#fff;font-size:28px;">‹</button>
+    <img class="modal-content" id="modal-img" onclick="event.stopPropagation()">
+    <button type="button" id="image-next" onclick="event.stopPropagation(); changePreviewImage(1)" style="display:none;position:absolute;right:14px;z-index:1;border:0;border-radius:50%;width:42px;height:42px;background:rgba(0,0,0,.6);color:#fff;font-size:28px;">›</button>
+    <span id="image-counter" style="display:none;position:absolute;bottom:18px;color:#fff;background:rgba(0,0,0,.6);padding:4px 10px;border-radius:12px;font-size:.8rem;"></span>
   </div>
 
   <div id="client-record-detail-modal" class="modal" onclick="closeClientRecordDetail()">
@@ -971,7 +974,7 @@
     function renderHistoryPhotoItem(label, photoUrls) {
       const content = photoUrls.length
         ? photoUrls.map(url => `
-            <button type="button" class="history-photo-button" onclick="previewImage(this.querySelector('img').src)">
+            <button type="button" class="history-photo-button" onclick="previewImageFromButton(this)">
               <img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" onerror="this.closest('.history-photo-button').remove()">
             </button>
           `).join('')
@@ -991,7 +994,7 @@
 
     function detailPhotoGroup(label, photoUrls) {
       const content = photoUrls.length
-        ? photoUrls.map(url => `<button type="button" class="client-detail-photo-button" data-photo-url="${escapeHtml(url)}" onclick="event.stopPropagation(); previewImage(this.dataset.photoUrl)"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" onerror="this.closest('.client-detail-photo-button').remove()"></button>`).join('')
+        ? photoUrls.map(url => `<button type="button" class="client-detail-photo-button" onclick="event.stopPropagation(); previewImageFromButton(this)"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" onerror="this.closest('.client-detail-photo-button').remove()"></button>`).join('')
         : '<span class="client-detail-photo-empty">暂无照片</span>';
       return `<div class="client-detail-photo-group"><span class="client-detail-photo-label">${escapeHtml(label)}</span><div class="client-detail-photo-images">${content}</div></div>`;
     }
@@ -1491,16 +1494,50 @@
     }
 
     // 模态框预览大图
-    function previewImage(src) {
-      const modal = document.getElementById('image-modal');
+    let previewPhotos = [];
+    let previewPhotoIndex = 0;
+    function updatePreviewImage() {
       const modalImg = document.getElementById('modal-img');
+      const multiple = previewPhotos.length > 1;
+      modalImg.src = previewPhotos[previewPhotoIndex] || '';
+      document.getElementById('image-prev').style.display = multiple ? 'block' : 'none';
+      document.getElementById('image-next').style.display = multiple ? 'block' : 'none';
+      const counter = document.getElementById('image-counter');
+      counter.style.display = multiple ? 'block' : 'none';
+      counter.textContent = `${previewPhotoIndex + 1} / ${previewPhotos.length}`;
+    }
+    function previewImage(src, photos = [src], index = 0) {
+      const modal = document.getElementById('image-modal');
+      previewPhotos = (Array.isArray(photos) ? photos : [src]).filter(Boolean);
+      previewPhotoIndex = Math.max(0, previewPhotos.indexOf(src));
+      if (Number.isInteger(index) && index >= 0 && index < previewPhotos.length) previewPhotoIndex = index;
       modal.style.display = 'flex';
-      modalImg.src = src;
+      updatePreviewImage();
+    }
+    function previewImageFromButton(button) {
+      const images = Array.from(button.parentElement.querySelectorAll('img')).map(image => image.currentSrc || image.src).filter(Boolean);
+      previewImage(button.querySelector('img').currentSrc || button.querySelector('img').src, images, Array.from(button.parentElement.querySelectorAll('button')).indexOf(button));
+    }
+    function changePreviewImage(step) {
+      if (previewPhotos.length < 2) return;
+      previewPhotoIndex = (previewPhotoIndex + step + previewPhotos.length) % previewPhotos.length;
+      updatePreviewImage();
     }
 
     function closeModal() {
       document.getElementById('image-modal').style.display = 'none';
     }
+    (() => {
+      let startX = null;
+      const modal = document.getElementById('image-modal');
+      modal.addEventListener('touchstart', event => { startX = event.changedTouches[0].clientX; }, { passive: true });
+      modal.addEventListener('touchend', event => {
+        if (startX === null) return;
+        const distance = event.changedTouches[0].clientX - startX;
+        startX = null;
+        if (Math.abs(distance) >= 42) changePreviewImage(distance < 0 ? 1 : -1);
+      }, { passive: true });
+    })();
 
     function originalImageFilename(file, fallback) {
       return /\.(jpe?g|png|gif)$/i.test(file.name || '') ? file.name : fallback;
