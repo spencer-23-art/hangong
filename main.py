@@ -208,9 +208,12 @@ def _replace_image_placeholder(paragraph, placeholder, image_paths, max_height_c
 def _convert_docx_to_pdf(source_docx, output_dir):
     profile_dir = os.path.join(output_dir, 'libreoffice-profile')
     os.makedirs(profile_dir, exist_ok=True)
+    # Preserve the 300KB source photos embedded in the DOCX.  LibreOffice's
+    # default PDF export may downsample/re-encode them a second time.
+    pdf_export = 'pdf:writer_pdf_Export:{"ReduceImageResolution":{"type":"boolean","value":"false"},"UseLosslessCompression":{"type":"boolean","value":"true"},"Quality":{"type":"long","value":"100"}}'
     subprocess.run([
         'soffice', '--headless', f'-env:UserInstallation=file://{profile_dir}',
-        '--convert-to', 'pdf:writer_pdf_Export', '--outdir', output_dir, source_docx
+        '--convert-to', pdf_export, '--outdir', output_dir, source_docx
     ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=90)
     output_pdf = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(source_docx))[0]}.pdf")
     if not os.path.exists(output_pdf) or os.path.getsize(output_pdf) == 0:
@@ -291,7 +294,7 @@ def _information_card_values(record, exam, work_dir):
         # Heights correspond to the template's reserved table rows.  The insert
         # helper obtains each cell width from the template and keeps every photo
         # within that cell instead of changing the table geometry.
-        '<dtz>': ([_row_value(record, 'photo_path')], 4.4),
+        '<dtz>': ([_row_value(record, 'photo_path')], 4.8),
         '<hgz>': (groups.get('1', []), 2.7),
         '<tzryzyz>': (groups.get('2', []), 2.7),
         '<hjks>': (exam_photos, 2.9),
@@ -333,7 +336,7 @@ def generate_qualification_certificate(record, exam, issuer_name, issued_at):
             '<pzr>': issuer_name,
             '<time>': issued_at,
         }, {
-            '<dtz>': (_row_value(record, 'photo_path'), 2.2),
+            '<dtz>': ([_row_value(record, 'photo_path')], 4.8),
         })
         pdf_path = _convert_docx_to_pdf(docx_path, work_dir)
         image_base = os.path.join(work_dir, 'qualification_certificate')
