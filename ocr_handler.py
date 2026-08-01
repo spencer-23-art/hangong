@@ -933,6 +933,21 @@ def _evaluate_crop_candidate(engine, method, candidate, source):
     }
 
 
+def _is_usable_partial_crop(evaluation):
+    """Accept a safe card crop even when OCR has not read every field perfectly."""
+    if evaluation is None:
+        return False
+    ocr_score, name, id_card, _ = evaluation["metrics"]
+    # A complete or format-valid ID number is strong evidence that the crop is
+    # the card itself.  Otherwise require meaningful text evidence: a name plus
+    # other fields, or several recognised ID-card labels.
+    if _is_valid_id_card_number(id_card):
+        return True
+    if ocr_score >= 180:
+        return True
+    return bool(name) and ocr_score >= 95
+
+
 def ocr_idcard_process(image_path):
     engine = init_ppocrv6()
     source = _read_and_auto_orient(image_path)
@@ -946,8 +961,9 @@ def ocr_idcard_process(image_path):
     name, id_card, nation = initial_metrics[1], initial_metrics[2], initial_metrics[3]
     print(f"[OCR-Debug] 输入方向: {orientation_method}, OCR框: {len(initial_ocr or [])}, 质量分: {initial_metrics[0]:.1f}")
 
-    # 最多两次候选裁切识别：文档裁切器 → OpenCV。避免低质量图片反复执行完整 OCR。
-    print("[OCR-Debug] 裁切顺序: document_preprocessor -> opencv（最多两次候选）")
+    # 依次尝试各类裁切候选：文档检测、OpenCV 卡身/轮廓、OCR 锚点。
+    # 不再因为前面的不完整候选而跳过后续方法。
+    print("[OCR-Debug] 裁切顺序: document_preprocessor -> opencv 卡身/轮廓 -> OCR 锚点")
     evaluations = []
     selected = None
 
@@ -965,7 +981,7 @@ def ocr_idcard_process(image_path):
             selected = evaluation
             break
 
-    # 第二道：OpenCV 卡面检测；总候选数限制为两次。
+    # 第二道：OpenCV 卡面检测。卡身检测与轮廓检测都会评估，避免只试一种方法就回退。
     if selected is None:
         print("[OCR-Debug] 第一道未完整识别，进入第二道 OpenCV")
         opencv_candidates = []
@@ -976,8 +992,6 @@ def ocr_idcard_process(image_path):
         contour_crop = crop_by_card_contour(oriented, is_special_cert=False)
         opencv_candidates.append(("opencv_card_contour", contour_crop))
         for method, candidate in opencv_candidates:
-            if len(evaluations) >= 2:
-                break
             if candidate is None:
                 print(f"[OCR-Debug] 第二道无有效候选: {method}")
                 continue
@@ -989,8 +1003,17 @@ def ocr_idcard_process(image_path):
                 selected = evaluation
                 break
 
+    # 第三道：当已从原图读到身份证关键文字时，根据文字锚点反推卡片边界。
+    if selected is None and initial_ocr:
+        ocr_anchor_crop = _crop_by_ocr_boxes(oriented, initial_ocr)
+        evaluation = _evaluate_crop_candidate(engine, "ocr_box_anchor", ocr_anchor_crop, oriented)
+        if evaluation is not None:
+            evaluations.append(evaluation)
+            if evaluation["complete"]:
+                selected = evaluation
+
     if selected is None:
-        print("[OCR-Debug] 两次候选均未完整识别，保留最佳结果")
+        print("[OCR-Debug] 各候选均未完整识别，评估是否可保留最佳裁切结果")
 
     # 汇总所有候选中的最佳识别字段；仅当裁切图明显提升信息质量时才作为不完整结果保存。
     for evaluation in evaluations:
@@ -1006,14 +1029,14 @@ def ocr_idcard_process(image_path):
         best_info_score = selected["metrics"][0]
     else:
         best_partial = max(evaluations, key=lambda item: item["score"], default=None)
-        if best_partial is not None and best_partial["metrics"][0] >= initial_metrics[0] + 35:
+        if _is_usable_partial_crop(best_partial):
             img_cropped = best_partial["image"]
             crop_method = best_partial["method"] + "_partial"
-            print("[OCR-Debug] 三道均未完整识别，保留信息质量明显更高的安全裁切候选")
+            print("[OCR-Debug] 未完整识别，保留已通过结构与 OCR 证据校验的安全裁切候选")
         else:
             img_cropped = oriented.copy()
             crop_method = "original_safe"
-            print("[OCR-Debug] 三道均未完整识别，保护性保留原图")
+            print("[OCR-Debug] 所有裁切候选均缺少身份证识别证据，保护性保留原图")
 
     if crop_method != "original_safe" and img_cropped.shape[1] < 856:
         scale = 856.0 / img_cropped.shape[1]
