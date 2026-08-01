@@ -76,6 +76,47 @@ def init_ppocrv6():
 
 # ================= 2. 图像裁剪核心算法 (移植自 run.py) =================
 TARGET_ASPECT_RATIO = 3.37 / 2.13
+MAX_OCR_OUTPUT_BYTES = 300 * 1024
+
+
+def _save_ocr_crop_with_limit(image, path, max_bytes=MAX_OCR_OUTPUT_BYTES):
+    """Save the OCR result image as JPEG without allowing it to bypass upload limits."""
+    if image is None or image.size == 0:
+        raise ValueError("OCR裁剪图为空")
+
+    current = image
+    # Start from a practical upper bound.  A much larger crop provides little
+    # benefit for viewing an ID card, but can easily exceed the upload ceiling.
+    longest_edge = max(current.shape[:2])
+    if longest_edge > 1600:
+        scale = 1600.0 / longest_edge
+        current = cv2.resize(current, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+
+    # Prefer the highest JPEG quality that fits.  If a detailed image still
+    # does not fit, reduce its dimensions gradually and retry.
+    for _ in range(6):
+        best = None
+        low, high = 35, 92
+        while low <= high:
+            quality = (low + high) // 2
+            ok, encoded = cv2.imencode('.jpg', current, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+            if not ok:
+                raise RuntimeError("OCR裁剪图 JPEG 编码失败")
+            if len(encoded) <= max_bytes:
+                best = encoded
+                low = quality + 1
+            else:
+                high = quality - 1
+        if best is not None:
+            best.tofile(path)
+            return
+
+        height, width = current.shape[:2]
+        if min(width, height) <= 320:
+            break
+        current = cv2.resize(current, None, fx=0.82, fy=0.82, interpolation=cv2.INTER_AREA)
+
+    raise RuntimeError("OCR裁剪图无法压缩至300KB")
 
 def _order_points(pts):
     rect = np.zeros((4, 2), dtype="float32")
@@ -981,7 +1022,7 @@ def ocr_idcard_process(image_path):
 
     cropped_filename = f"crop_{uuid.uuid4().hex}.jpg"
     cropped_path = os.path.join(TEMP_IDS_DIR, cropped_filename).replace('\\', '/')
-    cv2.imencode('.jpg', img_cropped, [int(cv2.IMWRITE_JPEG_QUALITY), 94])[1].tofile(cropped_path)
+    _save_ocr_crop_with_limit(img_cropped, cropped_path)
 
     return {
         "name": name,
