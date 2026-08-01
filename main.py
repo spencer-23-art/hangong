@@ -176,11 +176,13 @@ def _replace_image_placeholder(paragraph, placeholder, image_paths, max_height_c
         # the former contact-sheet image.
         cell = getattr(paragraph, '_parent', None)
         cell_width_cm = getattr(getattr(cell, 'width', None), 'cm', 0) or 0
-        # Writer applies additional internal table margins that python-docx does
-        # not expose. Reserve part of the declared cell width so a row of photos
-        # never wraps and stretches the information-card template.
-        layout_safety = 0.70 if len(valid_paths) > 1 else 0.96
-        usable_width_cm = max(0.6, (cell_width_cm - 0.18) * layout_safety)
+        # A single portrait is fitted against both dimensions of its own slot:
+        # whichever edge is reached first determines the final size.  Multi-photo
+        # rows retain a margin so they cannot wrap and stretch the template.
+        if len(valid_paths) == 1:
+            usable_width_cm = max(0.6, cell_width_cm)
+        else:
+            usable_width_cm = max(0.6, (cell_width_cm - 0.18) * 0.70)
         max_width_cm = max(0.45, usable_width_cm / len(valid_paths))
 
         for image_path in valid_paths:
@@ -294,7 +296,7 @@ def _information_card_values(record, exam, work_dir):
         # Heights correspond to the template's reserved table rows.  The insert
         # helper obtains each cell width from the template and keeps every photo
         # within that cell instead of changing the table geometry.
-        '<dtz>': ([_row_value(record, 'photo_path')], 4.8),
+        '<dtz>': ([_row_value(record, 'photo_path')], 5.0),
         '<hgz>': (groups.get('1', []), 2.7),
         '<tzryzyz>': (groups.get('2', []), 2.7),
         '<hjks>': (exam_photos, 2.9),
@@ -336,7 +338,7 @@ def generate_qualification_certificate(record, exam, issuer_name, issued_at):
             '<pzr>': issuer_name,
             '<time>': issued_at,
         }, {
-            '<dtz>': ([_row_value(record, 'photo_path')], 4.8),
+            '<dtz>': ([_row_value(record, 'photo_path')], 5.0),
         })
         pdf_path = _convert_docx_to_pdf(docx_path, work_dir)
         image_base = os.path.join(work_dir, 'qualification_certificate')
