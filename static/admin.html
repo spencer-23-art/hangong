@@ -1180,9 +1180,9 @@
 
   <!-- 图片放大查看模态框 -->
   <div id="img-modal" class="modal" onclick="closeModal()">
-    <button type="button" id="img-prev" onclick="event.stopPropagation(); changeZoomImage(-1)" style="display:none;position:absolute;left:14px;z-index:1;border:0;border-radius:50%;width:42px;height:42px;background:rgba(0,0,0,.6);color:#fff;font-size:28px;">‹</button>
+    <button type="button" id="img-prev" onclick="event.stopPropagation(); changeZoomImage(-1)" style="display:none;position:absolute;left:14px;z-index:1;border:0;border-radius:8px;min-width:76px;height:38px;background:rgba(0,0,0,.7);color:#fff;font-size:14px;">上一张</button>
     <img id="modal-img" class="modal-content" src="" onclick="event.stopPropagation()">
-    <button type="button" id="img-next" onclick="event.stopPropagation(); changeZoomImage(1)" style="display:none;position:absolute;right:14px;z-index:1;border:0;border-radius:50%;width:42px;height:42px;background:rgba(0,0,0,.6);color:#fff;font-size:28px;">›</button>
+    <button type="button" id="img-next" onclick="event.stopPropagation(); changeZoomImage(1)" style="display:none;position:absolute;right:14px;z-index:1;border:0;border-radius:8px;min-width:76px;height:38px;background:rgba(0,0,0,.7);color:#fff;font-size:14px;">下一张</button>
     <span id="img-counter" style="display:none;position:absolute;bottom:18px;color:#fff;background:rgba(0,0,0,.6);padding:4px 10px;border-radius:12px;font-size:.8rem;"></span>
   </div>
 
