@@ -178,10 +178,10 @@
   #mobile-admin-live .person-meta { margin-top:1px; color:var(--app-muted); font-size:.66rem; }
   #mobile-admin-live .state-pill { flex:0 0 auto; padding:3px 6px; border-radius:7px; color:#e0e7ff; background:rgba(79,70,229,.30); font-size:.63rem; white-space:nowrap; }
   #mobile-admin-live .state-pill.warning { color:#fef3c7; background:rgba(245,158,11,.22); }
-  #mobile-admin-live .record-details { display:grid; grid-template-columns:1fr 1fr; gap:3px 6px; margin:4px 0; padding:4px 0; border-top:1px solid var(--app-line); border-bottom:1px solid var(--app-line); }
-  #mobile-admin-live .record-details div { min-width:0; color:var(--app-muted); font-size:.61rem; line-height:1.05; }
-  #mobile-admin-live .record-details strong { display:block; overflow:hidden; margin-top:1px; color:var(--app-text); font-size:.68rem; line-height:1.08; font-weight:550; text-overflow:ellipsis; white-space:nowrap; }
-  #mobile-admin-live .record-details .wide { grid-column:1 / -1; }
+  #mobile-admin-live .record-details { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:2px 4px; margin:3px 0; padding:3px 0; border-top:1px solid var(--app-line); border-bottom:1px solid var(--app-line); }
+  #mobile-admin-live .record-details div { min-width:0; color:var(--app-muted); font-size:.58rem; line-height:1.03; }
+  #mobile-admin-live .record-details strong { display:block; overflow:hidden; margin-top:1px; color:var(--app-text); font-size:.64rem; line-height:1.05; font-weight:550; text-overflow:ellipsis; white-space:nowrap; }
+  #mobile-admin-live .record-details .wide { grid-column:auto; }
   #mobile-admin-live .record-photo-gallery { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:3px; margin:4px 0 1px; }
   #mobile-admin-live .record-photo-slot { min-width:0; padding:2px; border:1px solid var(--app-line); border-radius:6px; background:rgba(255,255,255,.025); }
   #mobile-admin-live .record-photo-slot small { display:block; overflow:hidden; color:var(--app-muted); font-size:.54rem; line-height:1.1; text-align:center; text-overflow:ellipsis; white-space:nowrap; }

@@ -611,9 +611,9 @@
       .admin-history-photo-label { margin-bottom:2px; font-size:.58rem; line-height:1.1; }
       .admin-history-photo-images { gap:2px; }
       .admin-history-photo-empty { min-height:40px; font-size:.56rem; }
-      .admin-history-details-grid { grid-template-columns:repeat(3,minmax(0,1fr)); min-width:0; gap:3px 5px; }
-      .admin-history-info-item { gap:2px; min-height:15px; font-size:.64rem; line-height:1.05; }
-      .admin-history-info-name { font-size:.72rem; }
+      .admin-history-details-grid { grid-template-columns:repeat(3,minmax(0,1fr)) !important; min-width:0; gap:2px 4px; }
+      .admin-history-info-item { gap:1px; min-height:14px; font-size:.6rem; line-height:1.03; }
+      .admin-history-info-name { font-size:.68rem; }
       .admin-history-info-id,.admin-history-info-address { grid-column:auto; align-items:center; }
       .admin-history-info-address .admin-history-info-value { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     }
@@ -651,12 +651,12 @@
     .detail-photo-row .detail-site-photo-preview { width:100% !important; min-height:145px; height:145px !important; box-sizing:border-box; }
     .detail-photo-row .detail-site-photo-preview { grid-template-columns:repeat(2,minmax(0,1fr)); }
     .detail-photo-row .detail-site-photo-preview button { min-height:0; }
-    .detail-assessment-photo-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:0 0 14px; }
+    .detail-assessment-photo-row { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:0 0 14px; }
     .detail-assessment-photo-row[hidden] { display:none !important; }
-    .detail-assessment-photo-row.single-photo-group { grid-template-columns:minmax(0,1fr); }
+    .detail-assessment-photo-row.single-photo-group { grid-template-columns:repeat(4,minmax(0,1fr)); }
     .detail-assessment-photo-group { min-width:0; text-align:center; }
-    .detail-assessment-photo-preview { width:100%; min-height:130px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; padding:4px; box-sizing:border-box; border:1px dashed var(--glass-border); border-radius:8px; background:rgba(255,255,255,.02); }
-    .detail-assessment-photo-preview button { min-width:0; min-height:100px; padding:0; overflow:hidden; border:0; border-radius:5px; background:rgba(0,0,0,.22); cursor:pointer; }
+    .detail-assessment-photo-preview { width:100%; min-height:145px; height:145px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; padding:4px; box-sizing:border-box; border:1px dashed var(--glass-border); border-radius:8px; background:rgba(255,255,255,.02); }
+    .detail-assessment-photo-preview button { min-width:0; min-height:0; padding:0; overflow:hidden; border:0; border-radius:5px; background:rgba(0,0,0,.22); cursor:pointer; }
     .detail-assessment-photo-preview img { width:100%; height:100%; object-fit:cover; display:block; }
     .detail-site-photo-preview { width: 120px; min-height: 160px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px dashed var(--glass-border); border-radius: 8px; background: rgba(255,255,255,.02); }
     .detail-site-photo-preview:has(> :only-child) { grid-template-columns: 1fr; }
@@ -670,8 +670,8 @@
       .detail-photo-row .photo-uploader,
       .detail-photo-row .detail-site-photo-preview { min-height:102px; height:102px !important; }
       .detail-assessment-photo-row { gap:7px; margin-bottom:10px; }
-      .detail-assessment-photo-preview { min-height:100px; grid-template-columns:repeat(2,minmax(0,1fr)); }
-      .detail-assessment-photo-preview button { min-height:92px; }
+      .detail-assessment-photo-preview { min-height:102px; height:102px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .detail-assessment-photo-preview button { min-height:0; }
       #detail-record-form .form-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:8px !important; margin-bottom:12px !important; }
       #detail-record-form .form-grid .form-group { margin-bottom:0 !important; }
       #detail-record-form .form-grid label { margin-bottom:2px !important; font-size:.72rem !important; }
