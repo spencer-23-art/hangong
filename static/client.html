@@ -972,9 +972,10 @@
     }
 
     function renderHistoryPhotoItem(label, photoUrls) {
+      const photoList = encodeURIComponent(JSON.stringify(photoUrls));
       const content = photoUrls.length
-        ? photoUrls.map(url => `
-            <button type="button" class="history-photo-button" onclick="previewImageFromButton(this)">
+        ? photoUrls.map((url, index) => `
+            <button type="button" class="history-photo-button" data-photo-list="${photoList}" data-photo-index="${index}" onclick="previewImageFromButton(this)">
               <img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" onerror="this.closest('.history-photo-button').remove()">
             </button>
           `).join('')
@@ -1515,6 +1516,17 @@
       updatePreviewImage();
     }
     function previewImageFromButton(button) {
+      const photoList = button.dataset.photoList;
+      if (photoList) {
+        try {
+          const photos = JSON.parse(decodeURIComponent(photoList)).filter(Boolean);
+          const index = Number(button.dataset.photoIndex) || 0;
+          if (photos.length) {
+            previewImage(photos[index] || button.querySelector('img').currentSrc || button.querySelector('img').src, photos, index);
+            return;
+          }
+        } catch (_) { /* Fall back to the visible photo group. */ }
+      }
       const images = Array.from(button.parentElement.querySelectorAll('img')).map(image => image.currentSrc || image.src).filter(Boolean);
       previewImage(button.querySelector('img').currentSrc || button.querySelector('img').src, images, Array.from(button.parentElement.querySelectorAll('button')).indexOf(button));
     }

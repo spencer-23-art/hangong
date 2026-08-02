@@ -278,7 +278,7 @@ def _information_card_values(record, exam, work_dir):
     text_values = {
         '<xm>': _row_value(record, 'name'),
         '<hgh>': _row_value(record, 'welder_code'),
-        '<xmmc>': _row_value(record, 'exam_project'),
+        '<xmmc>': _row_value(record, 'region_auth'),
         '<dw>': _row_value(record, 'company'),
         '<qy>': _row_value(record, 'region_auth'),
         '<sfz>': _row_value(record, 'id_card'),
@@ -332,7 +332,7 @@ def generate_qualification_certificate(record, exam, issuer_name, issued_at):
             '<xm>': _row_value(record, 'name'),
             '<hgh>': _row_value(record, 'welder_code'),
             '<dw>': _row_value(record, 'company'),
-            '<xmmc>': _row_value(record, 'exam_project'),
+            '<xmmc>': _row_value(record, 'region_auth'),
             '<ksxm>': _row_value(record, 'exam_project'),
             '<zjzyx>': _row_value(record, 'certificate_work_item'),
             '<pzr>': issuer_name,

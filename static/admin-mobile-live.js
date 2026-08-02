@@ -108,7 +108,8 @@
       ['身份证', record.id_card ? ['/uploads/idcards/' + encodeURIComponent(record.id_card) + '.png?token=' + encodeURIComponent(authToken())] : []]
     ];
     return '<div class="record-photo-gallery">' + slots.map(function (slot) {
-      var images = slot[1].length ? slot[1].map(function (url) { return '<button type="button" onclick="zoomImageFromButton(this)"><img src="' + esc(url) + '" alt="' + esc(slot[0]) + '" onerror="this.closest(\'button\').remove()"></button>'; }).join('') : '<span>暂无</span>';
+      var photoList = encodeURIComponent(JSON.stringify(slot[1]));
+      var images = slot[1].length ? slot[1].map(function (url, index) { return '<button type="button" data-photo-list="' + photoList + '" data-photo-index="' + index + '" onclick="zoomImageFromButton(this)"><img src="' + esc(url) + '" alt="' + esc(slot[0]) + '" onerror="this.closest(\'button\').remove()"></button>'; }).join('') : '<span>暂无</span>';
       return '<div class="record-photo-slot"><small>' + esc(slot[0]) + '</small><div>' + images + '</div></div>';
     }).join('') + '</div>';
   }

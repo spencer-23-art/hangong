@@ -2346,8 +2346,9 @@
     }
 
     function renderAdminHistoryPhotoItem(label, photoUrls) {
+      const photoList = encodeURIComponent(JSON.stringify(photoUrls));
       const content = photoUrls.length
-        ? photoUrls.map(url => `<button type="button" class="admin-history-photo-button" onclick="zoomImageFromButton(this)"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" onerror="this.closest('.admin-history-photo-button').remove()"></button>`).join('')
+        ? photoUrls.map((url, index) => `<button type="button" class="admin-history-photo-button" data-photo-list="${photoList}" data-photo-index="${index}" onclick="zoomImageFromButton(this)"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" onerror="this.closest('.admin-history-photo-button').remove()"></button>`).join('')
         : '<span class="admin-history-photo-empty">暂无照片</span>';
       return `<div class="admin-history-photo-item"><span class="admin-history-photo-label">${escapeHtml(label)}</span><div class="admin-history-photo-images">${content}</div></div>`;
     }
@@ -2837,6 +2838,17 @@
       updateZoomImage();
     }
     function zoomImageFromButton(button) {
+      const photoList = button.dataset.photoList;
+      if (photoList) {
+        try {
+          const photos = JSON.parse(decodeURIComponent(photoList)).filter(Boolean);
+          const index = Number(button.dataset.photoIndex) || 0;
+          if (photos.length) {
+            zoomImage(photos[index] || button.querySelector('img').currentSrc || button.querySelector('img').src, photos, index);
+            return;
+          }
+        } catch (_) { /* Fall back to the visible photo group. */ }
+      }
       const images = Array.from(button.parentElement.querySelectorAll('img')).map(image => image.currentSrc || image.src).filter(Boolean);
       zoomImage(button.querySelector('img').currentSrc || button.querySelector('img').src, images, Array.from(button.parentElement.querySelectorAll('button')).indexOf(button));
     }
