@@ -2130,15 +2130,8 @@
         }
         return response.blob();
       })
-      .then(blob => {
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = '恢复人员照片.zip';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-
+      .then(blob => saveBlobForDownload(blob, '恢复人员照片.zip'))
+      .then(() => {
         // 将选中的记录从选中集与反选集清除，并触发局部刷新
         const downloadedIds = ids.split(',').map(Number);
         downloadedIds.forEach(id => {
@@ -2738,6 +2731,49 @@
       }
     }
 
+    // Android WebView cannot save blob: links by itself.  Send authenticated
+    // download bytes to the native shell in small chunks; regular browsers
+    // continue to use their normal anchor download path.
+    function saveBlobForDownload(blob, filename) {
+      const downloader = window.HangongDownloader;
+      if (downloader && typeof downloader.beginDownload === 'function') {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          let transferId = '';
+          reader.onerror = () => reject(new Error('文件读取失败'));
+          reader.onload = () => {
+            try {
+              const dataUrl = String(reader.result || '');
+              const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+              transferId = downloader.beginDownload(filename, blob.type || 'application/octet-stream');
+              if (!transferId) throw new Error('无法创建下载任务');
+              const chunkSize = 60 * 1024;
+              for (let offset = 0; offset < base64.length; offset += chunkSize) {
+                if (downloader.appendDownloadChunk(transferId, base64.slice(offset, offset + chunkSize)) !== true) {
+                  throw new Error('文件传输失败');
+                }
+              }
+              if (downloader.finishDownload(transferId) !== true) throw new Error('文件保存失败');
+              resolve();
+            } catch (error) {
+              if (transferId && typeof downloader.cancelDownload === 'function') downloader.cancelDownload(transferId);
+              reject(error);
+            }
+          };
+          reader.readAsDataURL(blob);
+        });
+      }
+      const blobUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = blobUrl;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 0);
+      return Promise.resolve();
+    }
+
     // 带有 Token 鉴权的通用文件下载辅助函数
     function downloadFileWithToken(url, filename, shouldRefreshList) {
       return fetch(url, {
@@ -2749,15 +2785,8 @@
         }
         return response.blob();
       })
-      .then(blob => {
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        
+      .then(blob => saveBlobForDownload(blob, filename))
+      .then(() => {
         if (shouldRefreshList) {
           const urlParams = new URLSearchParams(url.split('?')[1]);
           const ids = urlParams.get('ids');
@@ -4127,11 +4156,7 @@
             }
           }
         }
-        var link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
-        URL.revokeObjectURL(link.href);
+        await saveBlobForDownload(blob, filename);
       } catch (err) {
         console.error('下载失败', err);
         showAlert('error', '下载答题详情文档失败');

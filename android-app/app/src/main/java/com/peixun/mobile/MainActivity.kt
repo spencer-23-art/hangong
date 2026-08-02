@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Base64
 import android.util.Log
 import android.view.Gravity
 import android.view.View
@@ -18,6 +19,7 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.SslErrorHandler
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
@@ -32,8 +34,12 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.FileOutputStream
 import java.net.URL
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.net.HttpURLConnection
 
@@ -44,6 +50,7 @@ class MainActivity : Activity() {
         private const val APP_HOST = "39.106.163.230"
         private const val FILE_CHOOSER_REQUEST = 1001
         private const val STORAGE_PERMISSION_REQUEST = 1002
+        private const val MAX_BRIDGE_DOWNLOAD_BYTES = 30 * 1024 * 1024
     }
 
     private lateinit var webView: WebView
@@ -52,6 +59,7 @@ class MainActivity : Activity() {
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var pendingDownload: DownloadRequest? = null
     private val downloadExecutor = Executors.newSingleThreadExecutor()
+    private val bridgeDownloads = ConcurrentHashMap<String, BridgeDownload>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -120,6 +128,7 @@ class MainActivity : Activity() {
         if (::webView.isInitialized) {
             webView.destroy()
         }
+        bridgeDownloads.clear()
         downloadExecutor.shutdownNow()
         super.onDestroy()
     }
@@ -196,6 +205,10 @@ class MainActivity : Activity() {
             userAgentString = "$userAgentString HangongManagement/1.0"
         }
         CookieManager.getInstance().setAcceptCookie(true)
+        // WebView does not hand blob: URLs to Android's download manager.  The
+        // authenticated web pages send those file bytes through this bridge so
+        // PDFs/JPGs are saved by Android just like a normal browser download.
+        webView.addJavascriptInterface(WebDownloadBridge(), "HangongDownloader")
 
         // Some Android 9/10 builds reveal the status bar again after a WebView
         // navigation or a file picker returns. Re-apply immersive mode once the
@@ -308,6 +321,73 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    private inner class WebDownloadBridge {
+        @JavascriptInterface
+        fun beginDownload(rawFilename: String?, rawMimeType: String?): String {
+            val id = UUID.randomUUID().toString()
+            bridgeDownloads[id] = BridgeDownload(
+                filename = sanitizeDownloadFilename(rawFilename),
+                mimeType = rawMimeType?.takeIf { it.isNotBlank() } ?: "application/octet-stream",
+                buffer = ByteArrayOutputStream()
+            )
+            return id
+        }
+
+        @JavascriptInterface
+        fun appendDownloadChunk(id: String?, encodedChunk: String?): Boolean {
+            val download = id?.let { bridgeDownloads[it] } ?: return false
+            return try {
+                val bytes = Base64.decode(encodedChunk.orEmpty(), Base64.DEFAULT)
+                synchronized(download) {
+                    if (download.buffer.size() + bytes.size > MAX_BRIDGE_DOWNLOAD_BYTES) {
+                        bridgeDownloads.remove(id)
+                        return false
+                    }
+                    download.buffer.write(bytes)
+                }
+                true
+            } catch (error: Exception) {
+                Log.w(TAG, "Unable to receive download chunk", error)
+                bridgeDownloads.remove(id)
+                false
+            }
+        }
+
+        @JavascriptInterface
+        fun finishDownload(id: String?): Boolean {
+            val download = id?.let { bridgeDownloads.remove(it) } ?: return false
+            return try {
+                val bytes = synchronized(download) { download.buffer.toByteArray() }
+                if (bytes.isEmpty()) throw IllegalStateException("Downloaded file is empty")
+                ByteArrayInputStream(bytes).use { input ->
+                    saveToDownloads(download.filename, download.mimeType, input)
+                }
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "文件已保存到下载目录：${download.filename}", Toast.LENGTH_LONG).show()
+                }
+                true
+            } catch (error: Exception) {
+                Log.e(TAG, "Unable to save bridged download", error)
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "下载失败，请稍后重试", Toast.LENGTH_LONG).show()
+                }
+                false
+            }
+        }
+
+        @JavascriptInterface
+        fun cancelDownload(id: String?) {
+            id?.let { bridgeDownloads.remove(it) }
+        }
+    }
+
+    private fun sanitizeDownloadFilename(value: String?): String {
+        return value.orEmpty()
+            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            .trim()
+            .ifBlank { "下载文件" }
     }
 
     private fun saveToDownloads(filename: String, mimeType: String?, input: java.io.InputStream) {
@@ -451,5 +531,11 @@ class MainActivity : Activity() {
         val userAgent: String,
         val contentDisposition: String,
         val mimeType: String
+    )
+
+    private data class BridgeDownload(
+        val filename: String,
+        val mimeType: String,
+        val buffer: ByteArrayOutputStream
     )
 }
