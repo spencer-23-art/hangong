@@ -1233,11 +1233,11 @@
               if (!transferId) throw new Error('无法创建下载任务');
               const chunkSize = 60 * 1024;
               for (let offset = 0; offset < base64.length; offset += chunkSize) {
-                if (downloader.appendDownloadChunk(transferId, base64.slice(offset, offset + chunkSize)) !== true) {
+                if (!downloader.appendDownloadChunk(transferId, base64.slice(offset, offset + chunkSize))) {
                   throw new Error('文件传输失败');
                 }
               }
-              if (downloader.finishDownload(transferId) !== true) throw new Error('文件保存失败');
+              if (!downloader.finishDownload(transferId)) throw new Error('文件保存失败');
               resolve();
             } catch (error) {
               if (transferId && typeof downloader.cancelDownload === 'function') downloader.cancelDownload(transferId);

@@ -1982,11 +1982,20 @@ def issue_certificate(record_id: int, admin = Depends(get_admin_user)):
 def download_certificate(record_id: int, admin = Depends(get_admin_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT name, certificate_path FROM records WHERE id=?", (record_id,))
+        cursor.execute("SELECT * FROM records WHERE id=?", (record_id,))
         record = cursor.fetchone()
-    if not record or not record['certificate_path'] or not os.path.exists(record['certificate_path']):
-        raise HTTPException(status_code=404, detail="合格证尚未签发")
-    return FileResponse(record['certificate_path'], media_type='image/jpeg', headers={'Content-Disposition': f"attachment; filename*=utf-8''{urllib.parse.quote(_download_filename(record['name'], '合格证.jpg'))}"})
+        if not record or not record['certificate_path']:
+            raise HTTPException(status_code=404, detail="合格证尚未签发")
+        # Certificates are kept as JPG files after signing.  Re-render them on
+        # download so template placeholder changes (such as <xmmc>) immediately
+        # apply to certificates that were issued before the template update.
+        exam = _latest_welding_exam(cursor, record_id)
+        issuer_name = _row_value(record, 'certificate_issuer') or _row_value(admin, 'real_name') or _row_value(admin, 'username')
+        issued_at = _row_value(record, 'certificate_issued_at') or beijing_now().strftime('%Y-%m-%d %H:%M:%S')
+        certificate_path = generate_qualification_certificate(record, exam, issuer_name, issued_at)
+        cursor.execute("UPDATE records SET certificate_path=? WHERE id=?", (certificate_path, record_id))
+        conn.commit()
+    return FileResponse(certificate_path, media_type='image/jpeg', headers={'Content-Disposition': f"attachment; filename*=utf-8''{urllib.parse.quote(_download_filename(record['name'], '合格证.jpg'))}"})
 
 # 录入培训数据
 @app.post("/api/record")

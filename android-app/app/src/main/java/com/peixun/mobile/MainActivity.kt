@@ -323,7 +323,9 @@ class MainActivity : Activity() {
         }
     }
 
-    private inner class WebDownloadBridge {
+    // This class must remain public: Android WebView invokes annotated methods
+    // through reflection and cannot reliably access a private bridge class.
+    inner class WebDownloadBridge {
         @JavascriptInterface
         fun beginDownload(rawFilename: String?, rawMimeType: String?): String {
             val id = UUID.randomUUID().toString()
