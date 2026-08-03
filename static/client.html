@@ -1218,6 +1218,23 @@
       showAlert('info', `正在下载 ${ids.length} 份信息卡...`);
     }
 
+    function startNativeAuthenticatedDownload(url, filename, mimeType, authorization) {
+      const downloader = window.HangongDownloader;
+      if (!downloader || typeof downloader.downloadAuthenticatedUrl !== 'function') return false;
+      try {
+        const absoluteUrl = new URL(url, window.location.href).href;
+        return !!downloader.downloadAuthenticatedUrl(
+          absoluteUrl,
+          filename,
+          mimeType || 'application/octet-stream',
+          authorization
+        );
+      } catch (error) {
+        console.warn('原生下载器不可用，改用浏览器下载', error);
+        return false;
+      }
+    }
+
     function saveClientBlobForDownload(blob, filename) {
       const downloader = window.HangongDownloader;
       if (downloader && typeof downloader.beginDownload === 'function') {
@@ -1266,6 +1283,17 @@
         return;
       }
       try {
+        const record = historyData.find(item => Number(item.id) === Number(recordId));
+        const nativeFilename = `${record?.name || '人员'}信息卡.pdf`;
+        if (startNativeAuthenticatedDownload(
+          `/api/record/download_info_card/${recordId}`,
+          nativeFilename,
+          'application/pdf',
+          token
+        )) {
+          if (!silent) showAlert('success', '信息卡已加入下载任务');
+          return;
+        }
         const response = await fetch(`/api/record/download_info_card/${recordId}`, {
           headers: { 'Authorization': token }
         });

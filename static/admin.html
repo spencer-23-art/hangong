@@ -2774,8 +2774,29 @@
       return Promise.resolve();
     }
 
+    function startNativeAuthenticatedDownload(url, filename, mimeType) {
+      const downloader = window.HangongDownloader;
+      if (!downloader || typeof downloader.downloadAuthenticatedUrl !== 'function') return false;
+      try {
+        const absoluteUrl = new URL(url, window.location.href).href;
+        return !!downloader.downloadAuthenticatedUrl(
+          absoluteUrl,
+          filename,
+          mimeType || 'application/octet-stream',
+          token
+        );
+      } catch (error) {
+        console.warn('原生下载器不可用，改用浏览器下载', error);
+        return false;
+      }
+    }
+
     // 带有 Token 鉴权的通用文件下载辅助函数
     function downloadFileWithToken(url, filename, shouldRefreshList) {
+      if (!shouldRefreshList && startNativeAuthenticatedDownload(url, filename)) {
+        showAlert('success', '文件已加入下载任务');
+        return Promise.resolve();
+      }
       return fetch(url, {
         headers: { 'Authorization': token }
       })

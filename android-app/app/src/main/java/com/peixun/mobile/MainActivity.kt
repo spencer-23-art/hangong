@@ -2,6 +2,7 @@ package com.hangong.mobile
 
 import android.Manifest
 import android.app.Activity
+import android.app.DownloadManager
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -116,7 +117,7 @@ class MainActivity : Activity() {
         val request = pendingDownload
         pendingDownload = null
         if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && request != null) {
-            downloadFile(request)
+            startSystemDownload(request)
         } else {
             Toast.makeText(this, "未取得存储权限，无法保存下载文件", Toast.LENGTH_LONG).show()
         }
@@ -276,7 +277,7 @@ class MainActivity : Activity() {
                 pendingDownload = request
                 requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), STORAGE_PERMISSION_REQUEST)
             } else {
-                downloadFile(request)
+                startSystemDownload(request)
             }
         }
     }
@@ -326,6 +327,32 @@ class MainActivity : Activity() {
     // This class must remain public: Android WebView invokes annotated methods
     // through reflection and cannot reliably access a private bridge class.
     inner class WebDownloadBridge {
+        // Passing a complete PDF/JPG through JavaScript as Base64 is not reliable
+        // on some WebView versions: the Java bridge has a per-message size limit.
+        // Let Android's download service retrieve the authenticated URL directly
+        // instead, so the file bytes never need to cross the WebView bridge.
+        @JavascriptInterface
+        fun downloadAuthenticatedUrl(
+            rawUrl: String?,
+            rawFilename: String?,
+            rawMimeType: String?,
+            rawAuthorization: String?
+        ): Boolean {
+            val url = rawUrl?.trim().orEmpty()
+            if (url.isBlank() || !isAllowedNavigation(Uri.parse(url))) return false
+
+            val request = DownloadRequest(
+                url = url,
+                userAgent = webView.settings.userAgentString.orEmpty(),
+                contentDisposition = "",
+                mimeType = rawMimeType?.takeIf { it.isNotBlank() } ?: "application/octet-stream",
+                filename = sanitizeDownloadFilename(rawFilename),
+                authorization = rawAuthorization?.takeIf { it.isNotBlank() }
+            )
+            runOnUiThread { startSystemDownload(request) }
+            return true
+        }
+
         @JavascriptInterface
         fun beginDownload(rawFilename: String?, rawMimeType: String?): String {
             val id = UUID.randomUUID().toString()
@@ -390,6 +417,39 @@ class MainActivity : Activity() {
             .replace(Regex("[\\\\/:*?\"<>|]"), "_")
             .trim()
             .ifBlank { "下载文件" }
+    }
+
+    private fun startSystemDownload(request: DownloadRequest) {
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingDownload = request
+            requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), STORAGE_PERMISSION_REQUEST)
+            return
+        }
+
+        try {
+            val filename = request.filename ?: URLUtil.guessFileName(
+                request.url,
+                request.contentDisposition,
+                request.mimeType
+            ).replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            val downloadRequest = DownloadManager.Request(Uri.parse(request.url)).apply {
+                setTitle(filename)
+                setDescription("正在下载文件")
+                setMimeType(request.mimeType)
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+                request.userAgent.takeIf { it.isNotBlank() }?.let { addRequestHeader("User-Agent", it) }
+                request.authorization?.let { addRequestHeader("Authorization", it) }
+                CookieManager.getInstance().getCookie(request.url)?.let { addRequestHeader("Cookie", it) }
+            }
+            (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(downloadRequest)
+            Toast.makeText(this, "已加入下载任务", Toast.LENGTH_SHORT).show()
+        } catch (error: Exception) {
+            Log.e(TAG, "Unable to start system download", error)
+            Toast.makeText(this, "下载失败：${error.message ?: "存储不可用"}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun saveToDownloads(filename: String, mimeType: String?, input: java.io.InputStream) {
@@ -532,7 +592,9 @@ class MainActivity : Activity() {
         val url: String,
         val userAgent: String,
         val contentDisposition: String,
-        val mimeType: String
+        val mimeType: String,
+        val filename: String? = null,
+        val authorization: String? = null
     )
 
     private data class BridgeDownload(
