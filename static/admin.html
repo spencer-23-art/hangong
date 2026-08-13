@@ -468,7 +468,7 @@
     }
     .filter-grid {
       display: grid;
-      grid-template-columns: 2fr 1fr 1fr auto;
+      grid-template-columns: 2fr 1fr 1fr 1fr auto;
       gap: 16px;
       align-items: flex-end;
     }
@@ -519,6 +519,26 @@
       white-space: nowrap;
       width: auto;
     }
+    .record-status-filter {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .record-status-filter-btn {
+      height: 38px;
+      padding: 0 8px;
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.04);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .record-status-filter-btn.is-active {
+      color: #fff;
+      background: var(--primary-color, #4f46e5);
+      border-color: var(--primary-color, #4f46e5);
+    }
 
     .exam-filter-grid {
       grid-template-columns: 1fr 1fr 1fr auto !important;
@@ -533,6 +553,9 @@
         grid-template-columns: 1fr 1fr;
       }
       .filter-date-range {
+        grid-column: span 2;
+      }
+      .record-status-filter-item {
         grid-column: span 2;
       }
       .filter-actions-btn {
@@ -827,6 +850,14 @@
           <div class="filter-item">
             <label class="filter-label">姓名搜索</label>
             <input type="text" id="filter-name" class="form-control filter-control" placeholder="输入姓名搜索..." oninput="handleNameSearch()" autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly');">
+          </div>
+          <div class="filter-item record-status-filter-item">
+            <label class="filter-label">快捷筛选</label>
+            <div class="record-status-filter" aria-label="人员状态筛选">
+              <button type="button" class="record-status-filter-btn" data-record-status="exited" onclick="setRecordStatusFilter('exited')">已退场</button>
+              <button type="button" class="record-status-filter-btn" data-record-status="qualified" onclick="setRecordStatusFilter('qualified')">合格</button>
+              <button type="button" class="record-status-filter-btn" data-record-status="unqualified" onclick="setRecordStatusFilter('unqualified')">不合格</button>
+            </div>
           </div>
           <!-- 筛选操作按钮 -->
           <div class="filter-actions-btn">
@@ -1518,6 +1549,7 @@
     let filterEndDate = '';
     let filterCompany = '';
     let filterName = '';
+    let filterRecordStatus = '';
     
     // 分页管理
     let recordsPage = 1;
@@ -2280,6 +2312,9 @@
         if (filterName) {
           url += 'name=' + encodeURIComponent(filterName) + '&';
         }
+        if (filterRecordStatus) {
+          url += 'record_status=' + encodeURIComponent(filterRecordStatus) + '&';
+        }
         
         url += 'page=' + recordsPage + '&limit=' + recordsLimit;
         
@@ -2541,6 +2576,19 @@
       }, 300);
     }
 
+    function updateRecordStatusFilterButtons() {
+      document.querySelectorAll('[data-record-status]').forEach(button => {
+        button.classList.toggle('is-active', button.dataset.recordStatus === filterRecordStatus);
+      });
+    }
+
+    function setRecordStatusFilter(status) {
+      filterRecordStatus = filterRecordStatus === status ? '' : status;
+      recordsPage = 1;
+      updateRecordStatusFilterButtons();
+      loadRecords();
+    }
+
     // 清除筛选日期、单位与姓名，并重置选中状态
     function clearDateFilter() {
       document.getElementById('filter-start-date').value = '';
@@ -2553,7 +2601,9 @@
       filterEndDate = '';
       filterCompany = '';
       filterName = '';
+      filterRecordStatus = '';
       recordsPage = 1;
+      updateRecordStatusFilterButtons();
       
       // 清空所有勾选历史状态，重新应用默认勾选
       selectedRecordsMap.clear();

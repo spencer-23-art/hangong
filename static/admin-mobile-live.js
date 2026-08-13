@@ -18,6 +18,7 @@
     recordCompanyOpen: false,
     recordFiltersOpen: false,
     recordStatus: 'all',
+    recordOutcome: '',
     downloadOpen: false,
     composing: { record: false, pending: false },
     pendingQuery: '',
@@ -151,6 +152,7 @@
     var selectedCompany = '';
     try { selectedCompany = typeof filterCompany !== 'undefined' ? filterCompany : ''; } catch (e) { selectedCompany = ''; }
     var status = function (key, text) { return '<button type="button" class="filter-option ' + (state.recordStatus === key ? 'is-selected' : '') + '" onclick="mobileAdminSetRecordStatus(\'' + key + '\')">' + text + '</button>'; };
+    var outcome = function (key, text) { return '<button type="button" class="filter-option ' + (state.recordOutcome === key ? 'is-selected' : '') + '" onclick="mobileAdminSetRecordOutcome(\'' + key + '\')">' + text + '</button>'; };
     return '<section class="tab-panel ' + (state.tab === 'records' ? 'is-active' : '') + '" data-panel="records">' +
       '<div class="summary-grid"><article class="summary-card primary"><div class="summary-label">培训记录</div><div class="summary-value">' + total + '</div><div class="summary-note">完整保留历史培训</div></article><article class="summary-card"><div class="summary-label">本页待下载</div><div class="summary-value">' + pending + '</div><div class="summary-note">默认已勾选，可逐个调整</div></article></div>' +
       '<div class="page-toolbar"><div class="company-combobox"><span class="search-glyph">' + icon('search') + '</span>' +
@@ -161,6 +163,7 @@
       '<div class="download-wrap"><button class="toolbar-btn" type="button" aria-label="下载所选人员" onclick="mobileAdminToggleDownload(event)">' + icon('download') + '</button>' +
         '<div class="download-chooser ' + (state.downloadOpen ? 'is-open' : '') + '"><h3>下载信息卡</h3><p>勾选人员后下载对应的信息卡 PDF。</p><div class="download-options"><button type="button" onclick="mobileAdminExport(\'info_cards\')">下载信息卡</button></div></div></div></div>' +
       '<div class="filter-panel ' + (state.recordFiltersOpen ? 'is-open' : '') + '"><div class="filter-group"><span class="filter-group-label">下载状态</span><div class="filter-options">' + status('all', '全部') + status('pending', '未下载') + status('downloaded', '已下载') + status('today', '今日录入') + '</div></div>' +
+        '<div class="filter-group"><span class="filter-group-label">人员状态</span><div class="filter-options">' + outcome('exited', '已退场') + outcome('qualified', '合格') + outcome('unqualified', '不合格') + '</div></div>' +
         '<div class="filter-panel-actions"><button type="button" onclick="mobileAdminClearRecordFilters()">重置</button><button type="button" class="apply-filter" onclick="mobileAdminToggleRecordFilters()">完成</button></div></div>' +
       '<div class="section-heading"><h3>' + esc(selectedCompany || '全部培训单位') + '</h3><span class="record-selection-summary">当前 ' + records.length + ' 人 <button class="small-action select-page-action" type="button" onclick="mobileAdminTogglePageRecords()">' + (allRecordsSelected ? '取消全选' : '全选本页') + '</button></span></div><div class="record-stack">' +
       (records.length ? records.map(recordCard).join('') : '<div class="empty-state">没有符合条件的培训记录</div>') + '</div>' + recordPager() + '</section>';
@@ -395,9 +398,16 @@
   };
   window.mobileAdminToggleRecordFilters = function (event) { if (event) event.stopPropagation(); state.recordFiltersOpen = !state.recordFiltersOpen; state.downloadOpen = false; render(); };
   window.mobileAdminSetRecordStatus = function (status) { state.recordStatus = status; render(); };
+  window.mobileAdminSetRecordOutcome = function (outcome) {
+    state.recordOutcome = state.recordOutcome === outcome ? '' : outcome;
+    try { filterRecordStatus = state.recordOutcome; recordsPage = 1; } catch (e) { /* page loading */ }
+    if (typeof window.updateRecordStatusFilterButtons === 'function') window.updateRecordStatusFilterButtons();
+    if (typeof window.loadRecords === 'function') window.loadRecords(); else render();
+  };
   window.mobileAdminClearRecordFilters = function () {
-    state.recordStatus = 'all'; state.recordFiltersOpen = false;
-    try { filterName = ''; filterCompany = ''; recordsPage = 1; document.getElementById('filter-name').value = ''; document.getElementById('filter-company').value = ''; } catch (e) { /* ignore */ }
+    state.recordStatus = 'all'; state.recordOutcome = ''; state.recordFiltersOpen = false;
+    try { filterName = ''; filterCompany = ''; filterRecordStatus = ''; recordsPage = 1; document.getElementById('filter-name').value = ''; document.getElementById('filter-company').value = ''; } catch (e) { /* ignore */ }
+    if (typeof window.updateRecordStatusFilterButtons === 'function') window.updateRecordStatusFilterButtons();
     if (typeof window.loadRecords === 'function') window.loadRecords(); else render();
   };
   window.mobileAdminToggleDownload = function (event) { if (event) event.stopPropagation(); state.downloadOpen = !state.downloadOpen; state.recordCompanyOpen = false; render(); };

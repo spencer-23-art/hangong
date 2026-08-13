@@ -2109,7 +2109,7 @@ async def create_record(
 
 # 获取同一单位的历史记录。记录归属仍用于服务端写入权限校验。
 @app.get("/api/records")
-def get_user_records(name: str = None, current_user = Depends(get_current_user)):
+def get_user_records(name: str = None, record_status: str = None, current_user = Depends(get_current_user)):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -2127,6 +2127,21 @@ def get_user_records(name: str = None, current_user = Depends(get_current_user))
     if name and name.strip():
         conditions.append("r.name LIKE ?")
         params.append(f"%{name.strip()}%")
+
+    normalized_status = (record_status or '').strip().lower()
+    if normalized_status == 'exited':
+        conditions.append("COALESCE(TRIM(r.exit_date), '') != ''")
+    elif normalized_status in ('qualified', 'unqualified'):
+        conditions.append('''
+            (
+              SELECT w.result
+              FROM welding_skill_exams w
+              WHERE w.record_id = r.id
+              ORDER BY w.id DESC
+              LIMIT 1
+            ) = ?
+        ''')
+        params.append(normalized_status)
     query = f'''
     SELECT r.*, u.real_name AS recorder_name,
            CASE WHEN r.user_id = ? THEN 1 ELSE 0 END AS is_owner,
@@ -2722,7 +2737,7 @@ def get_companies():
 
 # 查看所有已录入的信息（仅管理员，支持按日期区间筛选、工作单位筛选和门禁下载状态排序）
 @app.get("/api/admin/records")
-def get_all_records(start_date: str = None, end_date: str = None, company: str = None, name: str = None, page: int = 1, limit: int = 20, admin = Depends(get_admin_user)):
+def get_all_records(start_date: str = None, end_date: str = None, company: str = None, name: str = None, record_status: str = None, page: int = 1, limit: int = 20, admin = Depends(get_admin_user)):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -2750,6 +2765,21 @@ def get_all_records(start_date: str = None, end_date: str = None, company: str =
     if end:
         conditions.append("substr(r.created_at, 1, 10) <= ?")
         params.append(end)
+
+    normalized_status = (record_status or '').strip().lower()
+    if normalized_status == 'exited':
+        conditions.append("COALESCE(TRIM(r.exit_date), '') != ''")
+    elif normalized_status in ('qualified', 'unqualified'):
+        conditions.append('''
+            (
+              SELECT w.result
+              FROM welding_skill_exams w
+              WHERE w.record_id = r.id
+              ORDER BY w.id DESC
+              LIMIT 1
+            ) = ?
+        ''')
+        params.append(normalized_status)
         
     where_clause = ""
     if conditions:

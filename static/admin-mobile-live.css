@@ -140,7 +140,7 @@
   #mobile-admin-live .nav-item:active { transform:scale(.94); }
 
   #mobile-admin-live .filter-panel { max-height:0; overflow:hidden; margin:0; padding:0; border:0 solid var(--app-line); border-radius:15px; opacity:0; background:var(--app-panel); transform:translateY(-6px); transition:max-height .24s ease,opacity .18s ease,transform .24s ease,margin .24s ease,padding .24s ease,border-width .24s ease; }
-  #mobile-admin-live .filter-panel.is-open { max-height:280px; margin:0 0 12px; padding:12px; border-width:1px; opacity:1; transform:translateY(0); }
+  #mobile-admin-live .filter-panel.is-open { max-height:360px; margin:0 0 12px; padding:12px; border-width:1px; opacity:1; transform:translateY(0); }
   #mobile-admin-live .filter-group + .filter-group { margin-top:11px; }
   #mobile-admin-live .filter-group-label { display:block; margin-bottom:7px; color:var(--app-muted); font-size:.78rem; }
   #mobile-admin-live .filter-options { display:flex; flex-wrap:wrap; gap:7px; }
