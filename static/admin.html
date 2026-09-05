@@ -468,9 +468,15 @@
     }
     .filter-grid {
       display: grid;
-      grid-template-columns: 2fr 1fr 1fr 1fr auto;
+      grid-template-columns: 1.6fr .95fr .9fr .8fr 1.25fr auto;
       gap: 16px;
       align-items: flex-end;
+    }
+    @media (max-width: 1200px) {
+      .filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 768px) {
+      .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     .filter-item {
       display: flex;
@@ -850,6 +856,13 @@
           <div class="filter-item">
             <label class="filter-label">姓名搜索</label>
             <input type="text" id="filter-name" class="form-control filter-control" placeholder="输入姓名搜索..." oninput="handleNameSearch()" autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly');">
+          </div>
+          <!-- 区域权限（下拉表单，选项由 renderRegionFilterOptions 生成） -->
+          <div class="filter-item">
+            <label class="filter-label">区域权限</label>
+            <select id="filter-regions" class="form-control filter-control" onchange="handleRegionFilterChange()">
+              <option value="">全部区域</option>
+            </select>
           </div>
           <div class="filter-item record-status-filter-item">
             <label class="filter-label">快捷筛选</label>
@@ -1550,6 +1563,7 @@
     let filterCompany = '';
     let filterName = '';
     let filterRecordStatus = '';
+    let filterRegions = []; // 区域权限筛选（单选值存在数组中，兼容手机端多选）
     
     // 分页管理
     let recordsPage = 1;
@@ -2293,6 +2307,27 @@
       } catch (err) {
         console.error('获取可用区域列表失败:', err);
       }
+      renderRegionFilterOptions();
+    }
+
+    // 渲染筛选器区域权限下拉选项（按 systemRegions 动态生成，保留当前选中）
+    function renderRegionFilterOptions() {
+      const sel = document.getElementById('filter-regions');
+      if (!sel) return;
+      const current = filterRegions.length ? filterRegions[0] : '';
+      let html = '<option value="">全部区域</option>';
+      (systemRegions || []).forEach(r => {
+        html += '<option value="' + escapeHtml(r) + '"' + (r === current ? ' selected' : '') + '>' + escapeHtml(r) + '</option>';
+      });
+      sel.innerHTML = html;
+    }
+
+    // 筛选器区域下拉切换（单选；同步给手机端 filterRegions 数组）
+    function handleRegionFilterChange() {
+      const v = document.getElementById('filter-regions').value;
+      filterRegions = v ? [v] : [];
+      recordsPage = 1;
+      loadRecords();
     }
 
     // 1. 加载已录入的数据
@@ -2314,6 +2349,9 @@
         }
         if (filterRecordStatus) {
           url += 'record_status=' + encodeURIComponent(filterRecordStatus) + '&';
+        }
+        if (filterRegions.length > 0) {
+          url += 'regions=' + encodeURIComponent(filterRegions.join(',')) + '&';
         }
         
         url += 'page=' + recordsPage + '&limit=' + recordsLimit;
@@ -2602,6 +2640,9 @@
       filterCompany = '';
       filterName = '';
       filterRecordStatus = '';
+      filterRegions = [];
+      var regionSel = document.getElementById('filter-regions');
+      if (regionSel) regionSel.value = '';
       recordsPage = 1;
       updateRecordStatusFilterButtons();
       

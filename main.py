@@ -2735,15 +2735,41 @@ def get_companies():
     conn.close()
     return {"code": 200, "data": sorted_companies}
 
-# 查看所有已录入的信息（仅管理员，支持按日期区间筛选、工作单位筛选和门禁下载状态排序）
+def _parse_region_list(s):
+    """把逗号分隔的区域字符串解析为去空列表。"""
+    if not s or not s.strip():
+        return []
+    return [r.strip() for r in s.split(',') if r.strip()]
+
+def _region_match_conditions(column, region_list):
+    """生成逗号分隔多区域匹配条件。
+
+    region_auth 存储为 "三元肥,尿素塔" 逗号分隔多值。
+    用 ','||col||',' LIKE '%,区域,%' 精确匹配，避免 '尿素塔' 误配 '尿素塔A'。
+    返回 (sql_fragment, params)，region_list 为空时返回 (None, [])。
+    """
+    if not region_list:
+        return None, []
+    conds = [f"',' || IFNULL({column}, '') || ',' LIKE '%,' || ? || ',%'" for _ in region_list]
+    return "(" + " OR ".join(conds) + ")", list(region_list)
+
+# 查看所有已录入的信息（仅管理员，支持日期、单位、关键字、区域权限筛选）
 @app.get("/api/admin/records")
-def get_all_records(start_date: str = None, end_date: str = None, company: str = None, name: str = None, record_status: str = None, page: int = 1, limit: int = 20, admin = Depends(get_admin_user)):
+def get_all_records(start_date: str = None, end_date: str = None, company: str = None, name: str = None, record_status: str = None, regions: str = None, page: int = 1, limit: int = 20, admin = Depends(get_admin_user)):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
     conditions = []
     params = []
+    
+    # 区域权限筛选：regions 为逗号分隔多选（沿用 peixun 的匹配规则）
+    region_list = _parse_region_list(regions or '')
+    if region_list:
+        region_sql, region_params = _region_match_conditions('r.region_auth', region_list)
+        if region_sql:
+            conditions.append(region_sql)
+            params.extend(region_params)
     
     if company and company.strip():
         conditions.append("r.company = ?")
