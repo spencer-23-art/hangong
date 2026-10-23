@@ -6,7 +6,7 @@
   <title>培训信息录入系统 - 管理后台</title>
   <link rel="stylesheet" href="/static/css/style.css?v=1.0.6">
   <link rel="stylesheet" href="/static/css/mobile-app.css?v=1.1.0">
-  <link rel="stylesheet" href="/static/admin-mobile-live.css?v=1.0.10">
+  <link rel="stylesheet" href="/static/admin-mobile-live.css?v=1.0.11">
   <style>
     #img-modal { z-index: 3000; }
     /* 消息小铃铛与响应式消息审批 UI 样式 */
@@ -468,11 +468,14 @@
     }
     .filter-grid {
       display: grid;
-      grid-template-columns: 1.6fr .95fr .9fr .8fr 1.25fr auto;
-      gap: 16px;
+      grid-template-columns: 1.4fr 1fr .9fr .8fr .8fr .8fr 1.15fr auto;
+      gap: 14px;
       align-items: flex-end;
     }
-    @media (max-width: 1200px) {
+    @media (max-width: 1400px) {
+      .filter-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    @media (max-width: 1024px) {
       .filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
     @media (max-width: 768px) {
@@ -862,6 +865,20 @@
             <label class="filter-label">区域权限</label>
             <select id="filter-regions" class="form-control filter-control" onchange="handleRegionFilterChange()">
               <option value="">全部区域</option>
+            </select>
+          </div>
+          <!-- 岗位筛选（下拉表单，选项由 renderJobFilterOptions 生成） -->
+          <div class="filter-item">
+            <label class="filter-label">岗位筛选</label>
+            <select id="filter-job" class="form-control filter-control" onchange="handleJobFilterChange()">
+              <option value="">全部岗位</option>
+            </select>
+          </div>
+          <!-- 班组筛选（下拉表单，选项由 renderTeamFilterOptions 生成） -->
+          <div class="filter-item">
+            <label class="filter-label">班组筛选</label>
+            <select id="filter-team" class="form-control filter-control" onchange="handleTeamFilterChange()">
+              <option value="">全部班组</option>
             </select>
           </div>
           <div class="filter-item record-status-filter-item">
@@ -1564,6 +1581,9 @@
     let filterName = '';
     let filterRecordStatus = '';
     let filterRegions = []; // 区域权限筛选（单选值存在数组中，兼容手机端多选）
+    let filterJob = ''; // 岗位筛选
+    let filterTeam = ''; // 班组筛选
+    let recordsAllTeams = [];
     
     // 分页管理
     let recordsPage = 1;
@@ -2330,9 +2350,73 @@
       loadRecords();
     }
 
+    async function loadSystemJobs() {
+      try {
+        const response = await fetch('/api/job_types');
+        const result = await response.json();
+        if (response.ok && result.code === 200 && result.job_types) {
+          configuredJobs = result.job_types;
+        }
+      } catch (err) {
+        console.error('获取岗位列表失败:', err);
+      }
+      renderJobFilterOptions();
+    }
+
+    function renderJobFilterOptions() {
+      const sel = document.getElementById('filter-job');
+      if (!sel) return;
+      let html = '<option value="">全部岗位</option>';
+      (configuredJobs || []).forEach(j => {
+        html += '<option value="' + escapeHtml(j) + '"' + (j === filterJob ? ' selected' : '') + '>' + escapeHtml(j) + '</option>';
+      });
+      sel.innerHTML = html;
+    }
+
+    function handleJobFilterChange() {
+      const sel = document.getElementById('filter-job');
+      filterJob = sel ? sel.value : '';
+      try { if (window.mobileAdminSyncJob) window.mobileAdminSyncJob(filterJob); } catch (e) {}
+      recordsPage = 1;
+      loadRecords();
+    }
+
+    async function loadSystemTeams() {
+      try {
+        const response = await fetch('/api/admin/teams', {
+          headers: { 'Authorization': token }
+        });
+        const result = await response.json();
+        if (response.ok && result.code === 200 && result.data) {
+          recordsAllTeams = result.data;
+        }
+      } catch (err) {
+        console.error('获取班组列表失败:', err);
+      }
+      renderTeamFilterOptions();
+    }
+
+    function renderTeamFilterOptions() {
+      const sel = document.getElementById('filter-team');
+      if (!sel) return;
+      let html = '<option value="">全部班组</option>';
+      (recordsAllTeams || []).forEach(t => {
+        html += '<option value="' + escapeHtml(t) + '"' + (t === filterTeam ? ' selected' : '') + '>' + escapeHtml(t) + '</option>';
+      });
+      sel.innerHTML = html;
+    }
+
+    function handleTeamFilterChange() {
+      const sel = document.getElementById('filter-team');
+      filterTeam = sel ? sel.value : '';
+      try { if (window.mobileAdminSyncTeam) window.mobileAdminSyncTeam(filterTeam); } catch (e) {}
+      recordsPage = 1;
+      loadRecords();
+    }
+
     // 1. 加载已录入的数据
     async function loadRecords() {
-      await loadSystemRegions();
+      await Promise.all([loadSystemRegions(), loadSystemJobs(), loadSystemTeams()]);
       try {
         let url = '/api/admin/records?';
         if (filterStartDate) {
@@ -2352,6 +2436,12 @@
         }
         if (filterRegions.length > 0) {
           url += 'regions=' + encodeURIComponent(filterRegions.join(',')) + '&';
+        }
+        if (filterJob) {
+          url += 'job=' + encodeURIComponent(filterJob) + '&';
+        }
+        if (filterTeam) {
+          url += 'team=' + encodeURIComponent(filterTeam) + '&';
         }
         
         url += 'page=' + recordsPage + '&limit=' + recordsLimit;
@@ -2641,8 +2731,15 @@
       filterName = '';
       filterRecordStatus = '';
       filterRegions = [];
+      filterJob = '';
+      filterTeam = '';
       var regionSel = document.getElementById('filter-regions');
       if (regionSel) regionSel.value = '';
+      var jobSel = document.getElementById('filter-job');
+      if (jobSel) jobSel.value = '';
+      var teamSel = document.getElementById('filter-team');
+      if (teamSel) teamSel.value = '';
+      try { if (window.mobileAdminClearJobTeam) window.mobileAdminClearJobTeam(); } catch (e) {}
       recordsPage = 1;
       updateRecordStatusFilterButtons();
       
@@ -4576,6 +4673,8 @@
         const result = await response.json();
         if (response.ok && result.code === 200) {
           showAlert('success', '系统配置保存成功！');
+          loadSystemRegions();
+          loadSystemJobs();
         } else {
           alert(result.detail || '保存配置失败');
         }
@@ -5151,7 +5250,7 @@
     <button class="app-tab" type="button" data-tab="config" aria-selected="false" onclick="switchAdminTab('config'); setMobileTab('config')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.1 2.1-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56v.1h-3v-.1A1.7 1.7 0 0 0 10.7 18.6a1.7 1.7 0 0 0-1.88.34l-.06.06-2.1-2.1.06-.06A1.7 1.7 0 0 0 7.06 15 1.7 1.7 0 0 0 5.5 14H5.4v-3h.1A1.7 1.7 0 0 0 7.06 10a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.1-2.1.06.06A1.7 1.7 0 0 0 10.7 6.36a1.7 1.7 0 0 0 1.03-1.56V4.7h3v.1a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.1 2.1-.06.06A1.7 1.7 0 0 0 19.4 10a1.7 1.7 0 0 0 1.56 1h.1v3h-.1A1.7 1.7 0 0 0 19.4 15Z"></path></svg><span class="app-tab-label">设置</span></button>
   </nav>
   <section id="mobile-admin-live" aria-label="培训管理移动端"></section>
-  <script src="/static/admin-mobile-live.js?v=1.0.13"></script>
+  <script src="/static/admin-mobile-live.js?v=1.0.14"></script>
 
 </body>
 </html>

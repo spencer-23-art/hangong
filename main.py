@@ -2707,6 +2707,26 @@ def get_approved_companies(admin = Depends(get_admin_user)):
     conn.close()
     return {"code": 200, "data": sorted_companies}
 
+# 获取所有已存在的班组列表（仅管理员，供筛选器使用）
+@app.get("/api/admin/teams")
+def get_admin_teams(admin = Depends(get_admin_user)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT TRIM(team) FROM records WHERE team IS NOT NULL AND TRIM(team) != '' ORDER BY team ASC")
+    teams = [row[0] for row in cursor.fetchall() if row[0]]
+    conn.close()
+    return {"code": 200, "data": teams}
+
+# 获取所有已存在的班组列表（公开接口，供手机端/客户端使用）
+@app.get("/api/teams")
+def get_teams():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT TRIM(team) FROM records WHERE team IS NOT NULL AND TRIM(team) != '' ORDER BY team ASC")
+    teams = [row[0] for row in cursor.fetchall() if row[0]]
+    conn.close()
+    return {"code": 200, "teams": teams}
+
 # 获取所有已审核通过用户的单位列表（公开接口，供答题页面使用）
 # 排序逻辑：按 exam_records 中最后答题完毕时间降序，最近有人答完题的单位排最前面
 @app.get("/api/companies")
@@ -2753,9 +2773,9 @@ def _region_match_conditions(column, region_list):
     conds = [f"',' || IFNULL({column}, '') || ',' LIKE '%,' || ? || ',%'" for _ in region_list]
     return "(" + " OR ".join(conds) + ")", list(region_list)
 
-# 查看所有已录入的信息（仅管理员，支持日期、单位、关键字、区域权限筛选）
+# 查看所有已录入的信息（仅管理员，支持日期、单位、关键字、区域权限、岗位与班组筛选）
 @app.get("/api/admin/records")
-def get_all_records(start_date: str = None, end_date: str = None, company: str = None, name: str = None, record_status: str = None, regions: str = None, page: int = 1, limit: int = 20, admin = Depends(get_admin_user)):
+def get_all_records(start_date: str = None, end_date: str = None, company: str = None, name: str = None, record_status: str = None, regions: str = None, job: str = None, team: str = None, page: int = 1, limit: int = 20, admin = Depends(get_admin_user)):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -2770,6 +2790,14 @@ def get_all_records(start_date: str = None, end_date: str = None, company: str =
         if region_sql:
             conditions.append(region_sql)
             params.extend(region_params)
+            
+    if job and job.strip():
+        conditions.append("TRIM(r.job) = ?")
+        params.append(job.strip())
+        
+    if team and team.strip():
+        conditions.append("TRIM(r.team) = ?")
+        params.append(team.strip())
     
     if company and company.strip():
         conditions.append("r.company = ?")
@@ -2920,9 +2948,9 @@ def export_gate_old_compatible(ids: str = None, admin = Depends(get_admin_user))
         conn.commit()
     return _zip_download_response(zip_buffer.getvalue(), "门禁系统导入包.zip")
 
-# 导出并下载 Excel (按已有模板的格式，支持按 ids/日期区间 筛选)
+# 导出并下载 Excel (按已有模板的格式，支持按 ids/日期区间/岗位/班组 筛选)
 @app.get("/api/admin/export/excel")
-def export_excel(ids: str = None, start_date: str = None, end_date: str = None, company: str = None, name: str = None, admin = Depends(get_admin_user)):
+def export_excel(ids: str = None, start_date: str = None, end_date: str = None, company: str = None, name: str = None, job: str = None, team: str = None, admin = Depends(get_admin_user)):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -2933,6 +2961,14 @@ def export_excel(ids: str = None, start_date: str = None, end_date: str = None, 
     if company and company.strip():
         conditions.append("r.company = ?")
         params.append(company.strip())
+        
+    if job and job.strip():
+        conditions.append("TRIM(r.job) = ?")
+        params.append(job.strip())
+        
+    if team and team.strip():
+        conditions.append("TRIM(r.team) = ?")
+        params.append(team.strip())
         
     if name and name.strip():
         conditions.append("r.name LIKE ?")
@@ -4086,13 +4122,24 @@ def get_admin():
     with open("static/admin.html", "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read(), headers=headers)
 
-# 获取可用岗位/工种列表（公开接口，供客户端动态加载使用）
+# 获取可用岗位/工种列表（公开接口，供客户端动态加载及筛选使用）
 @app.get("/api/job_types")
 def get_job_types():
     default_jobs = '普工,木工,泥工,钢筋工,电焊工,电工,安拆工,塔吊司机,吊车司机,信号工,电梯司机,管理人员,安全员'
     jobs_str = get_config('job_types', default_jobs)
-    jobs_list = [j.strip() for j in jobs_str.split(',') if j.strip()]
-    return {"code": 200, "job_types": jobs_list}
+    configured_list = [j.strip() for j in jobs_str.split(',') if j.strip()]
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT TRIM(job) FROM records WHERE job IS NOT NULL AND TRIM(job) != ''")
+    db_jobs = [row[0] for row in cursor.fetchall() if row[0]]
+    conn.close()
+    all_jobs = list(dict.fromkeys(configured_list + db_jobs))
+    return {"code": 200, "job_types": all_jobs}
+
+# 获取可用岗位列表（仅管理员，供管理端筛选器使用）
+@app.get("/api/admin/jobs")
+def get_admin_jobs(admin = Depends(get_admin_user)):
+    return get_job_types()
 
 # 获取可用区域列表（公开接口，无需登录）
 @app.get("/api/regions")
