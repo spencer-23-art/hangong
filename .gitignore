@@ -1,3 +1,11 @@
+# 环境变量密钥（严禁入库，仓库为 public）
+.env
+.env.*
+
+# 本地打包的 Redis 可执行文件（约 48MB，服务器用 redis 镜像）
+redis_bin/
+*.bundle
+
 # 数据库与上传隐私文件（防泄漏极其重要）
 peixun.db
 training.db
