@@ -203,19 +203,44 @@
   function recordCard(r) {
     var downloaded = Number(r.is_gate_downloaded) === 1;
     var checked = selectedRecord(r.id);
-    var examResult = r.latest_welding_exam_result === 'qualified' ? (r.latest_welding_ndt_status === 'pending' ? '合格·待探伤' : '合格') : (r.latest_welding_exam_result === 'unqualified' ? (Number(r.welding_exam_count) >= 2 ? '不合格' : '待补考') : '未考试');
-    var ndtResult = r.latest_welding_exam_result !== 'qualified' ? '--' : (r.latest_welding_ndt_status === 'qualified' ? '探伤合格' : (r.latest_welding_ndt_status === 'unqualified' ? '探伤不合格' : (r.latest_welding_ndt_status === 'pending' ? '待探伤' : '无需探伤')));
+    var examCount = Number(r.welding_exam_count || 0);
+    var isTerminated = Number(r.latest_welding_is_terminated || 0) === 1;
+    var ndtAttemptCount = Number(r.latest_welding_ndt_attempt_count || 0);
+    var examResult = r.latest_welding_exam_result === 'qualified'
+      ? (r.latest_welding_ndt_status === 'pending' ? '合格·待探伤' : '合格')
+      : (r.latest_welding_exam_result === 'unqualified' ? (examCount >= 2 || isTerminated ? '不合格' : '待补考') : '未考试');
+    var ndtResult = r.latest_welding_exam_result !== 'qualified'
+      ? '--'
+      : (r.latest_welding_ndt_status === 'qualified'
+          ? '探伤合格'
+          : (r.latest_welding_ndt_status === 'unqualified'
+              ? '探伤不合格'
+              : (r.latest_welding_ndt_status === 'pending'
+                  ? (ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤')
+                  : '无需探伤')));
     var certificateEligible = r.latest_welding_exam_result === 'qualified' && ['qualified', 'not_required'].indexOf(r.latest_welding_ndt_status) !== -1;
     var certificateAction = certificateEligible ? (r.certificate_path
       ? '<button class="small-action success-action" type="button" onclick="mobileAdminDownloadCertificate(' + Number(r.id) + ',' + jsArg(r.name) + ')">下载合格证</button>'
       : '<button class="small-action warning-action" type="button" onclick="mobileAdminIssueCertificate(' + Number(r.id) + ')">签发</button>') : '';
     var examAction = '';
-    if (r.latest_welding_exam_result === 'qualified' && r.latest_welding_ndt_status === 'pending') {
-      examAction = '<button class="small-action" type="button" disabled>待探伤</button>';
-    } else if (r.latest_welding_exam_result === 'qualified') {
-      examAction = '<button class="small-action success-action" type="button" disabled>合格</button>';
-    } else if (r.latest_welding_exam_result === 'unqualified' && Number(r.welding_exam_count) >= 2) {
-      examAction = '<button class="small-action danger-action" type="button" disabled>不合格</button>';
+    if (r.latest_welding_exam_result === 'qualified') {
+      if (r.latest_welding_ndt_status === 'not_required') {
+        examAction = '<button class="small-action success-action" type="button" disabled>外观合格</button>';
+      } else if (r.latest_welding_ndt_status === 'qualified') {
+        examAction = '<button class="small-action success-action" type="button" disabled>探伤合格</button>';
+      } else if (r.latest_welding_ndt_status === 'pending') {
+        examAction = '<button class="small-action" type="button" disabled>' + (ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤') + '</button>';
+      } else if (r.latest_welding_ndt_status === 'unqualified') {
+        examAction = '<button class="small-action danger-action" type="button" disabled>探伤不合格</button>';
+      } else {
+        examAction = '<button class="small-action success-action" type="button" disabled>外观合格</button>';
+      }
+    } else if (r.latest_welding_exam_result === 'unqualified') {
+      if (examCount >= 2 || isTerminated) {
+        examAction = '<button class="small-action danger-action" type="button" disabled>外观不合格</button>';
+      } else {
+        examAction = '<button class="small-action danger-action" type="button" onclick="startWeldingSkillExam(' + Number(r.id) + ')">补考</button>';
+      }
     } else {
       examAction = '<button class="small-action danger-action" type="button" onclick="startWeldingSkillExam(' + Number(r.id) + ')">' + (r.latest_welding_exam_result === 'unqualified' ? '补考' : '考试') + '</button>';
     }

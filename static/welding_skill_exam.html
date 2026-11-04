@@ -37,6 +37,11 @@
     .ndt-choice-card h3 { margin:0 0 8px; font-size:18px; } .ndt-choice-card p { margin:0 0 16px; color:var(--muted); font-size:14px; }
     .ndt-choice-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .ndt-choice-actions button { min-height:42px; border:0; border-radius:9px; color:#fff; font-weight:700; cursor:pointer; }
     .ndt-no { background:var(--green); } .ndt-yes { background:var(--blue); }
+    .retake-choice { position:fixed; inset:0; z-index:15; display:none; place-items:center; padding:20px; background:rgba(2,6,23,.72); }
+    .retake-choice.visible { display:grid; } .retake-choice-card { width:min(100%,360px); padding:20px; border:1px solid var(--line); border-radius:14px; background:var(--panel); text-align:center; }
+    .retake-choice-card h3 { margin:0 0 8px; font-size:18px; } .retake-choice-card p { margin:0 0 16px; color:var(--muted); font-size:14px; }
+    .retake-choice-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .retake-choice-actions button { min-height:42px; border:0; border-radius:9px; color:#fff; font-weight:700; cursor:pointer; }
+    .retake-cancel { background:rgba(255,255,255,.12); border:1px solid var(--line); } .retake-confirm { background:var(--blue); }
     @media (min-width:680px) { .page { padding-left:22px; padding-right:22px; } }
   </style>
 </head>
@@ -44,20 +49,20 @@
   <main class="page">
     <header class="header">
       <button class="back" type="button" aria-label="返回" onclick="goBack()">‹</button>
-      <div><h1>焊接技能考试</h1><p class="subtitle">每次点击拍一张，全部拍完后一次确认</p></div>
+      <div><h1>焊接技能实操考核</h1><p class="subtitle" id="page-subtitle">第一步：外观检测（每次点击拍一张，全部拍完后一次确认）</p></div>
     </header>
 
     <input id="photo-input" type="file" accept="image/*" capture="environment" hidden>
     <div class="photo-collection" id="photo-collection">
       <button class="add-photo" id="capture-button" type="button" aria-label="拍摄考试照片" disabled>+</button>
     </div>
-    <p class="photo-hint">点击“+”拍一张考试过程照片，可重复添加多张。</p>
+    <p class="photo-hint">点击“+”拍一张实操过程照片，可重复添加多张。</p>
     <button class="confirm-photos" id="confirm-photos" type="button" disabled>确认本次拍摄照片</button>
-    <div class="confirmed-note" id="confirmed-note">照片已确认，请选择考试结果。</div>
+    <div class="confirmed-note" id="confirmed-note">照片已确认，请选择外观检测结果。</div>
 
     <section class="result-panel">
-      <h2 class="result-title">考试结果</h2>
-      <p class="result-tip" id="result-tip">请先拍摄并确认考试过程照片。</p>
+      <h2 class="result-title" id="result-title">外观检测结果</h2>
+      <p class="result-tip" id="result-tip">请先拍摄并确认实操过程照片。</p>
       <div class="result-buttons">
         <button class="result-button qualified" id="qualified-button" type="button" disabled>合格</button>
         <button class="result-button unqualified" id="unqualified-button" type="button" disabled>不合格</button>
@@ -65,12 +70,13 @@
       <div class="defect-box" id="defect-box">
         <label for="defect-issues">缺陷问题 *</label>
         <textarea id="defect-issues" maxlength="1000" placeholder="请填写焊接缺陷或不合格原因"></textarea>
-        <button class="defect-confirm" id="defect-confirm" type="button">确认不合格并结束考试</button>
+        <button class="defect-confirm" id="defect-confirm" type="button">确认外观不合格</button>
       </div>
     </section>
     <p class="notice" id="notice"></p>
   </main>
-  <div class="ndt-choice" id="ndt-choice"><div class="ndt-choice-card"><h3>考试合格</h3><p>本次焊接是否需要探伤？</p><div class="ndt-choice-actions"><button class="ndt-no" id="ndt-no" type="button">不需要</button><button class="ndt-yes" id="ndt-yes" type="button">需要探伤</button></div></div></div>
+  <div class="ndt-choice" id="ndt-choice"><div class="ndt-choice-card"><h3>外观检测合格</h3><p>本次焊接是否需要探伤？</p><div class="ndt-choice-actions"><button class="ndt-no" id="ndt-no" type="button">不需要</button><button class="ndt-yes" id="ndt-yes" type="button">需要探伤</button></div></div></div>
+  <div class="retake-choice" id="retake-choice"><div class="retake-choice-card"><h3>外观检测不合格</h3><p id="retake-tip">本次外观检测不合格。该人员有一次补考机会，是否进行补考？</p><div class="retake-choice-actions"><button class="retake-cancel" id="retake-cancel" type="button">取消</button><button class="retake-confirm" id="retake-confirm" type="button">补考</button></div></div></div>
   <div class="saving" id="saving"><div>正在保存考试记录，请稍候…</div></div>
 
   <script>
@@ -87,9 +93,23 @@
     const notice = document.getElementById('notice');
     const photos = [];
     let photosConfirmed = false;
+    let examAttemptCount = 0;
+    let isExamRetake = false;
 
     function setNotice(message, type = '') { notice.textContent = message; notice.className = `notice ${type}`; }
     function goBack() { history.length > 1 ? history.back() : location.replace('/client'); }
+    function updateExamStageTitle() {
+      const subtitle = document.getElementById('page-subtitle');
+      const resultTitle = document.getElementById('result-title');
+      if (subtitle) {
+        subtitle.textContent = isExamRetake
+          ? '第一步：外观检测（补考 - 仅一次机会）'
+          : '第一步：外观检测（每次点击拍一张，全部拍完后一次确认）';
+      }
+      if (resultTitle) {
+        resultTitle.textContent = isExamRetake ? '外观检测结果（补考）' : '外观检测结果';
+      }
+    }
     function updatePhotoList() {
       const collection = document.getElementById('photo-collection');
       confirmButton.disabled = !photos.length || photosConfirmed;
@@ -167,24 +187,49 @@
       photosConfirmed = true;
       confirmButton.disabled = true;
       document.getElementById('confirmed-note').style.display = 'block';
-      document.getElementById('result-tip').textContent = '请确认本次焊接技能考试结果。';
+      document.getElementById('result-tip').textContent = '请确认本次实操外观检测结果。';
       qualifiedButton.disabled = false; unqualifiedButton.disabled = false;
       updatePhotoList();
-      setNotice(`已确认 ${photos.length} 张考试照片。`, 'success');
+      setNotice(`已确认 ${photos.length} 张实操照片。`, 'success');
     }
-    async function submitExam(result, requiresNdt = false) {
+    async function submitExam(result, requiresNdt = false, isTerminated = false, continueInPage = false) {
       const defects = document.getElementById('defect-issues').value.trim();
       if (result === 'unqualified' && !defects) { setNotice('请填写缺陷问题。', 'error'); return; }
       const formData = new FormData();
-      formData.append('record_id', String(recordId)); formData.append('result', result); formData.append('defect_issues', defects); formData.append('requires_ndt', String(requiresNdt));
+      formData.append('record_id', String(recordId));
+      formData.append('result', result);
+      formData.append('defect_issues', defects);
+      formData.append('requires_ndt', String(requiresNdt));
+      formData.append('is_terminated', String(isTerminated));
       photos.forEach((photo, index) => formData.append('photos', photo.blob, photo.filename || `welding_exam_${index + 1}.jpg`));
       document.getElementById('saving').classList.add('visible');
       try {
         const response = await fetch('/api/welding-skill-exam', { method:'POST', headers:{ Authorization: token }, body:formData });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.detail || '考试保存失败，请重试');
-        setNotice(result === 'qualified' ? (requiresNdt ? '考试合格，等待探伤。' : '考试合格，考试已结束。') : '不合格原因已记录，考试已结束。', 'success');
-        // 管理员从管理端进入考试，返回管理端；并携带时间戳避免历史列表使用旧页面缓存。
+
+        if (continueInPage) {
+          photos.splice(0, photos.length).forEach(p => URL.revokeObjectURL(p.url));
+          photosConfirmed = false;
+          document.getElementById('confirmed-note').style.display = 'none';
+          defectBox.classList.remove('visible');
+          document.getElementById('defect-issues').value = '';
+          qualifiedButton.disabled = true;
+          unqualifiedButton.disabled = true;
+          confirmButton.disabled = true;
+          examAttemptCount = 1;
+          isExamRetake = true;
+          updateExamStageTitle();
+          updatePhotoList();
+          setNotice('初考不合格已记录。现已进入外观补考（最后一次机会），请重新拍摄实操过程照片。', 'success');
+          return;
+        }
+
+        if (result === 'qualified') {
+          setNotice(requiresNdt ? '外观合格，等待探伤。' : '外观合格，无需探伤，考核通过！', 'success');
+        } else {
+          setNotice(isExamRetake ? '外观补考不合格，考试已终止。' : '外观不合格已记录，未补考，考试终止。', 'error');
+        }
         const target = role === 'admin'
           ? `/admin?refresh=${Date.now()}`
           : `/client?tab=history&refresh=${Date.now()}`;
@@ -192,11 +237,29 @@
       } catch (error) { setNotice(error.message || '考试保存失败，请重试。', 'error'); }
       finally { document.getElementById('saving').classList.remove('visible'); }
     }
-    function startPage() {
+    async function startPage() {
       if (!token || role !== 'admin' || !recordId || recordId < 1) {
         captureButton.disabled = true;
         setNotice('仅管理员或二级管理员可以进行考试。', 'error');
         return;
+      }
+      try {
+        const res = await fetch(`/api/welding-skill-exam/status?record_id=${recordId}`, {
+          headers: { Authorization: token }
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (payload.code === 200 && payload.data) {
+          examAttemptCount = payload.data.exam_count || 0;
+          isExamRetake = !!payload.data.is_exam_retake;
+          if (!payload.data.can_exam) {
+            captureButton.disabled = true;
+            setNotice('该人员无实操考核资格或已完成全部考核机会。', 'error');
+            return;
+          }
+          updateExamStageTitle();
+        }
+      } catch (e) {
+        console.error(e);
       }
       captureButton.disabled = false;
     }
@@ -204,10 +267,35 @@
     photoInput.addEventListener('change', handleSelectedPhoto);
     confirmButton.addEventListener('click', confirmPhotos);
     qualifiedButton.addEventListener('click', () => document.getElementById('ndt-choice').classList.add('visible'));
-    document.getElementById('ndt-no').addEventListener('click', () => submitExam('qualified', false));
-    document.getElementById('ndt-yes').addEventListener('click', () => submitExam('qualified', true));
-    unqualifiedButton.addEventListener('click', () => { defectBox.classList.add('visible'); document.getElementById('defect-issues').focus(); });
-    document.getElementById('defect-confirm').addEventListener('click', () => submitExam('unqualified'));
+    document.getElementById('ndt-no').addEventListener('click', () => {
+      document.getElementById('ndt-choice').classList.remove('visible');
+      submitExam('qualified', false, false, false);
+    });
+    document.getElementById('ndt-yes').addEventListener('click', () => {
+      document.getElementById('ndt-choice').classList.remove('visible');
+      submitExam('qualified', true, false, false);
+    });
+    unqualifiedButton.addEventListener('click', () => {
+      defectBox.classList.add('visible');
+      document.getElementById('defect-issues').focus();
+    });
+    document.getElementById('defect-confirm').addEventListener('click', () => {
+      const defects = document.getElementById('defect-issues').value.trim();
+      if (!defects) { setNotice('请填写缺陷问题。', 'error'); return; }
+      if (!isExamRetake && examAttemptCount === 0) {
+        document.getElementById('retake-choice').classList.add('visible');
+      } else {
+        submitExam('unqualified', false, true, false);
+      }
+    });
+    document.getElementById('retake-cancel').addEventListener('click', () => {
+      document.getElementById('retake-choice').classList.remove('visible');
+      submitExam('unqualified', false, true, false);
+    });
+    document.getElementById('retake-confirm').addEventListener('click', () => {
+      document.getElementById('retake-choice').classList.remove('visible');
+      submitExam('unqualified', false, false, true);
+    });
     startPage();
   </script>
 </body>

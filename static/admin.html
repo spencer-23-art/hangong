@@ -2548,22 +2548,52 @@
         const welderCertificateUrls = sitePhotos.welderCertificate.map(adminPhotoUrl);
         const specialOperationCertificateUrls = sitePhotos.specialOperationCertificate.map(adminPhotoUrl);
         const idCardUrls = r.id_card ? [`/uploads/idcards/${encodeURIComponent(r.id_card)}.png?token=${encodeURIComponent(token)}`] : [];
-        const examResultText = r.latest_welding_exam_result === 'qualified' ? (r.latest_welding_ndt_status === 'pending' ? '合格·待探伤' : '合格') : (r.latest_welding_exam_result === 'unqualified' ? (Number(r.welding_exam_count) >= 2 ? '不合格' : '待补考') : '未考试');
-        const ndtResultText = r.latest_welding_exam_result !== 'qualified' ? '--' : (r.latest_welding_ndt_status === 'qualified' ? '探伤合格' : (r.latest_welding_ndt_status === 'unqualified' ? '探伤不合格' : (r.latest_welding_ndt_status === 'pending' ? '待探伤' : '无需探伤')));
-        const certificateEligible = r.latest_welding_exam_result === 'qualified' && ['qualified', 'not_required'].includes(r.latest_welding_ndt_status);
+        const examResult = r.latest_welding_exam_result;
+        const ndtStatus = r.latest_welding_ndt_status;
+        const examCount = Number(r.welding_exam_count || 0);
+        const isTerminated = Number(r.latest_welding_is_terminated || 0) === 1;
+        const ndtAttemptCount = Number(r.latest_welding_ndt_attempt_count || 0);
+
+        const examResultText = examResult === 'qualified'
+          ? (ndtStatus === 'pending' ? '合格·待探伤' : '合格')
+          : (examResult === 'unqualified' ? (examCount >= 2 || isTerminated ? '不合格' : '待补考') : '未考试');
+
+        const ndtResultText = examResult !== 'qualified'
+          ? '--'
+          : (ndtStatus === 'qualified'
+              ? '探伤合格'
+              : (ndtStatus === 'unqualified'
+                  ? '探伤不合格'
+                  : (ndtStatus === 'pending'
+                      ? (ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤')
+                      : '无需探伤')));
+
+        const certificateEligible = examResult === 'qualified' && ['qualified', 'not_required'].includes(ndtStatus);
         const certificateAction = certificateEligible
           ? (r.certificate_path ? `<button class="btn btn-success" style="padding:4px 8px;font-size:.8rem;width:auto;margin-left:0;" onclick="downloadCertificate(${r.id}, '${escapeHtml(r.name)}')">下载合格证</button>` : `<button class="btn btn-warning" style="padding:4px 8px;font-size:.8rem;width:auto;margin-left:0;" onclick="issueCertificate(${r.id})">签发</button>`)
           : '';
+
         let weldingExamAction = '';
-        if (r.latest_welding_exam_result === 'qualified' && r.latest_welding_ndt_status === 'pending') {
-          weldingExamAction = '<button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>待探伤</button>';
-        } else if (r.latest_welding_exam_result === 'qualified') {
-          weldingExamAction = '<button class="btn btn-success" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>合格</button>';
-        } else if (r.latest_welding_exam_result === 'unqualified' && Number(r.welding_exam_count) >= 2) {
-          weldingExamAction = '<button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>不合格</button>';
+        if (examResult === 'qualified') {
+          if (ndtStatus === 'not_required') {
+            weldingExamAction = '<button class="btn btn-success" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>外观合格</button>';
+          } else if (ndtStatus === 'qualified') {
+            weldingExamAction = '<button class="btn btn-success" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>探伤合格</button>';
+          } else if (ndtStatus === 'pending') {
+            weldingExamAction = `<button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>${ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤'}</button>`;
+          } else if (ndtStatus === 'unqualified') {
+            weldingExamAction = '<button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>探伤不合格</button>';
+          } else {
+            weldingExamAction = '<button class="btn btn-success" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>外观合格</button>';
+          }
+        } else if (examResult === 'unqualified') {
+          if (examCount >= 2 || isTerminated) {
+            weldingExamAction = '<button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>外观不合格</button>';
+          } else {
+            weldingExamAction = `<button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" onclick="startWeldingSkillExam(${r.id})">补考</button>`;
+          }
         } else {
-          const label = r.latest_welding_exam_result === 'unqualified' ? '补考' : '考试';
-          weldingExamAction = `<button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" onclick="startWeldingSkillExam(${r.id})">${label}</button>`;
+          weldingExamAction = `<button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" onclick="startWeldingSkillExam(${r.id})">考试</button>`;
         }
         tr.innerHTML = `
           <td style="text-align: center;"><input type="checkbox" class="record-checkbox" value="${r.id}" ${checkedAttr} onchange="handleSingleCheckboxChange(this, ${r.id})" onclick="event.stopPropagation()" style="width: 18px; height: 18px; cursor: pointer;"></td>
@@ -3188,9 +3218,35 @@
     function renderRecordDetailStatus(record) {
       const examResult = record.latest_welding_exam_result;
       const ndtStatus = record.latest_welding_ndt_status;
-      const examText = examResult === 'qualified' ? '考试合格' : (examResult === 'unqualified' ? (Number(record.welding_exam_count) >= 2 ? '考试不合格' : '待补考') : '未考试');
-      const ndtText = examResult !== 'qualified' ? '--' : (ndtStatus === 'qualified' ? '探伤合格' : (ndtStatus === 'pending' ? '待探伤' : '无需探伤'));
-      const finalText = examResult === 'qualified' && ['qualified', 'not_required'].includes(ndtStatus) ? '最终合格' : (examResult === 'qualified' ? '待探伤' : (examResult === 'unqualified' ? (Number(record.welding_exam_count) >= 2 ? '最终不合格' : '待补考') : '待考试'));
+      const examCount = Number(record.welding_exam_count || 0);
+      const isTerminated = Number(record.latest_welding_is_terminated || 0) === 1;
+      const ndtAttemptCount = Number(record.latest_welding_ndt_attempt_count || 0);
+
+      const examText = examResult === 'qualified'
+        ? (ndtStatus === 'pending' ? '合格·待探伤' : '外观合格')
+        : (examResult === 'unqualified' ? (examCount >= 2 || isTerminated ? '外观不合格' : '待补考') : '未考试');
+
+      const ndtText = examResult !== 'qualified'
+        ? '--'
+        : (ndtStatus === 'qualified'
+            ? '探伤合格'
+            : (ndtStatus === 'unqualified'
+                ? '探伤不合格'
+                : (ndtStatus === 'pending'
+                    ? (ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤')
+                    : '无需探伤')));
+
+      const finalText = (examResult === 'qualified' && ndtStatus === 'qualified')
+        ? '探伤合格'
+        : ((examResult === 'qualified' && ndtStatus === 'not_required')
+            ? '外观合格'
+            : (examResult === 'qualified' && ndtStatus === 'pending'
+                ? (ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤')
+                : (examResult === 'qualified' && ndtStatus === 'unqualified'
+                    ? '探伤不合格'
+                    : (examResult === 'unqualified'
+                        ? (examCount >= 2 || isTerminated ? '外观不合格' : '待补考')
+                        : '待考试'))));
       const entryComplete = record.name && record.id_card && record.phone && record.address && record.job && record.region_auth && record.photo_path;
       const typeFor = (value) => value.includes('合格') && !value.includes('不合格') ? 'success' : (value.includes('待') || value === '--' ? 'warning' : (value.includes('不合格') ? 'danger' : ''));
       const cells = [
@@ -5250,7 +5306,7 @@
     <button class="app-tab" type="button" data-tab="config" aria-selected="false" onclick="switchAdminTab('config'); setMobileTab('config')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.1 2.1-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56v.1h-3v-.1A1.7 1.7 0 0 0 10.7 18.6a1.7 1.7 0 0 0-1.88.34l-.06.06-2.1-2.1.06-.06A1.7 1.7 0 0 0 7.06 15 1.7 1.7 0 0 0 5.5 14H5.4v-3h.1A1.7 1.7 0 0 0 7.06 10a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.1-2.1.06.06A1.7 1.7 0 0 0 10.7 6.36a1.7 1.7 0 0 0 1.03-1.56V4.7h3v.1a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.1 2.1-.06.06A1.7 1.7 0 0 0 19.4 10a1.7 1.7 0 0 0 1.56 1h.1v3h-.1A1.7 1.7 0 0 0 19.4 15Z"></path></svg><span class="app-tab-label">设置</span></button>
   </nav>
   <section id="mobile-admin-live" aria-label="培训管理移动端"></section>
-  <script src="/static/admin-mobile-live.js?v=1.0.14"></script>
+  <script src="/static/admin-mobile-live.js?v=1.0.15"></script>
 
 </body>
 </html>

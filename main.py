@@ -257,15 +257,15 @@ def _exam_conclusion(exam):
     if not exam:
         return ''
     if _row_value(exam, 'result') != 'qualified':
-        return '考试不合格'
+        return '外观不合格'
     ndt_status = _row_value(exam, 'ndt_status')
     if ndt_status == 'qualified':
-        return '考试、探伤合格'
+        return '探伤合格'
     if ndt_status == 'unqualified':
-        return '考试合格，探伤不合格'
+        return '外观合格，探伤不合格'
     if ndt_status == 'not_required':
-        return '考试合格，无需探伤'
-    return '考试合格，待探伤'
+        return '外观合格'
+    return '外观合格，待探伤'
 
 def _information_card_values(record, exam, work_dir):
     groups = _parse_site_photo_paths(_row_value(record, 'site_photo_paths', ''))
@@ -287,7 +287,7 @@ def _information_card_values(record, exam, work_dir):
         '<zjzyx>': _row_value(record, 'certificate_work_item'),
         '<hgl>': '合格' if result == 'qualified' else ('不合格' if result == 'unqualified' else ''),
         '<qx>': _row_value(exam, 'defect_issues') if exam else '',
-        '<bk>': '是' if exam and int(_row_value(exam, 'attempt_number', 0)) > 1 else '否',
+        '<bk>': '是' if exam and (int(_row_value(exam, 'attempt_number', 0)) > 1 or int(_row_value(exam, 'ndt_attempt_count', 0)) > 1) else '否',
         '<ts>': '是' if exam and bool(_row_value(exam, 'ndt_required')) else '否',
         '<jg>': '合格' if ndt_status == 'qualified' else ('不合格' if ndt_status == 'unqualified' else ''),
         '<jl>': _exam_conclusion(exam),
@@ -1153,6 +1153,8 @@ def init_db():
         ('ndt_required', 'INTEGER NOT NULL DEFAULT 0'),
         ('ndt_status', "TEXT NOT NULL DEFAULT ''"),
         ('ndt_photo_paths', "TEXT NOT NULL DEFAULT '[]'"),
+        ('ndt_attempt_count', 'INTEGER NOT NULL DEFAULT 0'),
+        ('is_terminated', 'INTEGER NOT NULL DEFAULT 0'),
     ):
         try:
             cursor.execute(f"ALTER TABLE welding_skill_exams ADD COLUMN {column} {definition}")
@@ -2131,17 +2133,32 @@ def get_user_records(name: str = None, record_status: str = None, current_user =
     normalized_status = (record_status or '').strip().lower()
     if normalized_status == 'exited':
         conditions.append("COALESCE(TRIM(r.exit_date), '') != ''")
-    elif normalized_status in ('qualified', 'unqualified'):
+    elif normalized_status == 'qualified':
         conditions.append('''
             (
-              SELECT w.result
+              SELECT CASE
+                WHEN w.result = 'qualified' AND w.ndt_status IN ('qualified', 'not_required') THEN 'qualified'
+                ELSE 'unqualified'
+              END
               FROM welding_skill_exams w
               WHERE w.record_id = r.id
               ORDER BY w.id DESC
               LIMIT 1
-            ) = ?
+            ) = 'qualified'
         ''')
-        params.append(normalized_status)
+    elif normalized_status == 'unqualified':
+        conditions.append('''
+            (
+              SELECT CASE
+                WHEN w.result = 'unqualified' OR (w.result = 'qualified' AND w.ndt_status = 'unqualified') THEN 'unqualified'
+                ELSE 'other'
+              END
+              FROM welding_skill_exams w
+              WHERE w.record_id = r.id
+              ORDER BY w.id DESC
+              LIMIT 1
+            ) = 'unqualified'
+        ''')
     query = f'''
     SELECT r.*, u.real_name AS recorder_name,
            CASE WHEN r.user_id = ? THEN 1 ELSE 0 END AS is_owner,
@@ -2159,6 +2176,20 @@ def get_user_records(name: str = None, record_status: str = None, current_user =
              ORDER BY w.id DESC
              LIMIT 1
            ) AS latest_welding_ndt_status
+           ,(
+             SELECT w.ndt_attempt_count
+             FROM welding_skill_exams w
+             WHERE w.record_id = r.id
+             ORDER BY w.id DESC
+             LIMIT 1
+           ) AS latest_welding_ndt_attempt_count
+           ,(
+             SELECT w.is_terminated
+             FROM welding_skill_exams w
+             WHERE w.record_id = r.id
+             ORDER BY w.id DESC
+             LIMIT 1
+           ) AS latest_welding_is_terminated
            ,(
              SELECT COUNT(*)
              FROM welding_skill_exams w
@@ -2189,21 +2220,83 @@ def get_user_records(name: str = None, record_status: str = None, current_user =
     return {"code": 200, "data": records}
 
 
+@app.get("/api/welding-skill-exam/status")
+def get_welding_skill_exam_status(record_id: int, current_user = Depends(get_current_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, user_id FROM records WHERE id = ?", (record_id,))
+        record = cursor.fetchone()
+        if not record:
+            raise HTTPException(status_code=404, detail="人员记录不存在")
+
+        cursor.execute("""
+            SELECT * FROM welding_skill_exams
+            WHERE record_id = ?
+            ORDER BY id ASC
+        """, (record_id,))
+        exams = [dict(row) for row in cursor.fetchall()]
+        exam_count = len(exams)
+        latest_exam = exams[-1] if exams else None
+
+        latest_result = latest_exam['result'] if latest_exam else None
+        is_terminated = bool(latest_exam.get('is_terminated')) if latest_exam else False
+        ndt_required = bool(latest_exam.get('ndt_required')) if latest_exam else False
+        ndt_status = latest_exam.get('ndt_status', '') if latest_exam else ''
+        ndt_attempt_count = int(latest_exam.get('ndt_attempt_count') or 0) if latest_exam else 0
+
+        # 外观考核资格：未终止，且只有0次记录（初考）或有1次不合格记录（补考）
+        can_exam = not is_terminated and (
+            exam_count == 0 or (exam_count == 1 and latest_result == 'unqualified')
+        )
+        is_exam_retake = exam_count >= 1
+
+        # 探伤考核资格：实操外观合格，且需要探伤，且处于 pending 状态，且未终止，且探伤尝试次数 < 2
+        can_ndt = (
+            latest_result == 'qualified'
+            and ndt_required
+            and ndt_status == 'pending'
+            and not is_terminated
+            and ndt_attempt_count < 2
+        )
+        is_ndt_retake = ndt_attempt_count >= 1
+
+        return {
+            "code": 200,
+            "data": {
+                "record_id": record_id,
+                "name": record['name'],
+                "exam_count": exam_count,
+                "latest_result": latest_result,
+                "latest_defect": latest_exam.get('defect_issues', '') if latest_exam else '',
+                "is_terminated": 1 if is_terminated else 0,
+                "ndt_required": ndt_required,
+                "ndt_status": ndt_status,
+                "ndt_attempt_count": ndt_attempt_count,
+                "can_exam": can_exam,
+                "is_exam_retake": is_exam_retake,
+                "can_ndt": can_ndt,
+                "is_ndt_retake": is_ndt_retake
+            }
+        }
+
+
 @app.post("/api/welding-skill-exam")
 async def save_welding_skill_exam(
     record_id: int = Form(...),
     result: str = Form(...),
     defect_issues: str = Form(""),
     requires_ndt: str = Form("false"),
+    is_terminated: str = Form("false"),
     photos: list[UploadFile] = File(default=[]),
     current_user = Depends(get_current_user)
 ):
-    """保存一次焊接技能实操考试及其连续拍摄的过程照片。"""
+    """保存一次焊接技能实操外观考试及其连续拍摄的过程照片。"""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="仅管理员或二级管理员可以进行考试")
     result = (result or '').strip()
     defect_issues = (defect_issues or '').strip()
     needs_ndt = str(requires_ndt).strip().lower() in ('1', 'true', 'yes', 'on')
+    force_terminate = str(is_terminated).strip().lower() in ('1', 'true', 'yes', 'on')
     if result not in ('qualified', 'unqualified'):
         raise HTTPException(status_code=400, detail="考试结果无效")
     if result == 'unqualified' and not defect_issues:
@@ -2236,14 +2329,17 @@ async def save_welding_skill_exam(
             raise HTTPException(status_code=404, detail="人员记录不存在")
 
         cursor.execute(
-            "SELECT result FROM welding_skill_exams WHERE record_id = ? ORDER BY id ASC",
+            "SELECT result, is_terminated FROM welding_skill_exams WHERE record_id = ? ORDER BY id ASC",
             (record_id,)
         )
-        prior_attempts = cursor.fetchall()
-        if len(prior_attempts) >= 2:
-            raise HTTPException(status_code=409, detail="该人员已完成初考和一次补考，不能再次补考")
+        prior_attempts = [dict(r) for r in cursor.fetchall()]
+        if len(prior_attempts) >= 2 or any(p.get('is_terminated') for p in prior_attempts):
+            raise HTTPException(status_code=409, detail="该人员已无考核机会或考核已终止")
         if prior_attempts and prior_attempts[-1]['result'] == 'qualified':
             raise HTTPException(status_code=409, detail="该人员考试已合格，不能再次参加考试")
+
+        # 补考不合格直接终止，或者初考不合格选取消直接终止
+        terminated_flag = 1 if (force_terminate or (result == 'unqualified' and len(prior_attempts) >= 1)) else 0
 
         photo_dir = os.path.join(UPLOAD_DIR, 'welding_skill_exams', str(record_id), uuid.uuid4().hex)
         written_paths = []
@@ -2255,11 +2351,11 @@ async def save_welding_skill_exam(
                     file.write(content)
                 written_paths.append(path)
             cursor.execute('''
-                INSERT INTO welding_skill_exams (record_id, user_id, result, defect_issues, photo_paths, ndt_required, ndt_status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO welding_skill_exams (record_id, user_id, result, defect_issues, photo_paths, ndt_required, ndt_status, is_terminated, ndt_attempt_count, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
             ''', (
                 record_id, record['user_id'], result, defect_issues, json.dumps(written_paths, ensure_ascii=False),
-                int(needs_ndt), 'pending' if needs_ndt else 'not_required', beijing_now().strftime("%Y-%m-%d %H:%M:%S")
+                int(needs_ndt), 'pending' if needs_ndt else 'not_required', terminated_flag, beijing_now().strftime("%Y-%m-%d %H:%M:%S")
             ))
             conn.commit()
         except Exception:
@@ -2270,17 +2366,25 @@ async def save_welding_skill_exam(
                     pass
             raise
 
-    return {"code": 200, "message": "焊接技能考试已保存", "photo_count": len(written_paths)}
+    return {
+        "code": 200,
+        "message": "焊接技能实操外观考试已保存",
+        "photo_count": len(written_paths),
+        "is_terminated": bool(terminated_flag),
+        "attempt_number": len(prior_attempts) + 1
+    }
 
 
 @app.post("/api/welding-skill-exam/ndt")
 async def complete_welding_ndt(
     record_id: int = Form(...),
     result: str = Form("qualified"),
+    action: str = Form("submit"),
+    is_terminated: str = Form("false"),
     photos: list[UploadFile] = File(default=[]),
     current_user = Depends(get_current_user)
 ):
-    """保存探伤合格照片，并完成待探伤的焊接技能考试。"""
+    """保存探伤照片，并处理探伤合格/不合格/补考流程。"""
     if current_user['role'] == 'admin':
         raise HTTPException(status_code=403, detail="探伤仅可由对应的注册用户录入")
     if result not in ('qualified', 'unqualified'):
@@ -2290,6 +2394,9 @@ async def complete_welding_ndt(
         raise HTTPException(status_code=400, detail="请至少拍摄一张探伤照片")
     if len(uploaded_photos) > 60:
         raise HTTPException(status_code=400, detail="一次探伤最多上传60张照片")
+
+    force_terminate = str(is_terminated).strip().lower() in ('1', 'true', 'yes', 'on')
+    is_retake_action = str(action).strip().lower() == 'retake'
 
     prepared_photos = []
     allowed_extensions = {'.jpg', '.jpeg', '.png'}
@@ -2303,13 +2410,17 @@ async def complete_welding_ndt(
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT id FROM welding_skill_exams
+            SELECT id, ndt_attempt_count, is_terminated FROM welding_skill_exams
             WHERE record_id = ? AND user_id = ? AND result = 'qualified' AND ndt_status = 'pending'
             ORDER BY id DESC LIMIT 1
         ''', (record_id, current_user['id']))
         exam = cursor.fetchone()
         if not exam:
             raise HTTPException(status_code=404, detail="未找到待探伤的合格考试记录")
+
+        current_attempt = int(exam['ndt_attempt_count'] or 0)
+        if current_attempt >= 2 or exam['is_terminated']:
+            raise HTTPException(status_code=409, detail="该人员已无探伤考核机会或考核已终止")
 
         photo_dir = os.path.join(UPLOAD_DIR, 'welding_skill_exams', str(record_id), f"ndt_{uuid.uuid4().hex}")
         written_paths = []
@@ -2320,11 +2431,37 @@ async def complete_welding_ndt(
                 with open(path, 'wb') as file:
                     file.write(content)
                 written_paths.append(path)
-            cursor.execute('''
-                UPDATE welding_skill_exams
-                SET ndt_status = ?, ndt_photo_paths = ?
-                WHERE id = ?
-            ''', (result, json.dumps(written_paths, ensure_ascii=False), exam['id']))
+
+            if result == 'qualified':
+                # 探伤合格
+                cursor.execute('''
+                    UPDATE welding_skill_exams
+                    SET ndt_status = 'qualified', ndt_attempt_count = ?, ndt_photo_paths = ?, is_terminated = 0
+                    WHERE id = ?
+                ''', (current_attempt + 1, json.dumps(written_paths, ensure_ascii=False), exam['id']))
+                msg = "探伤合格已保存"
+                terminated = False
+            else:
+                # 探伤不合格
+                if current_attempt == 0 and is_retake_action and not force_terminate:
+                    # 初次探伤不合格，选择补考：状态保持 pending，尝试次数记 1，允许继续补考
+                    cursor.execute('''
+                        UPDATE welding_skill_exams
+                        SET ndt_status = 'pending', ndt_attempt_count = 1, is_terminated = 0, ndt_photo_paths = ?
+                        WHERE id = ?
+                    ''', (json.dumps(written_paths, ensure_ascii=False), exam['id']))
+                    msg = "初次探伤不合格已记录，现进入探伤补考"
+                    terminated = False
+                else:
+                    # 初次探伤选取消，或者补考不合格：直接终止！
+                    cursor.execute('''
+                        UPDATE welding_skill_exams
+                        SET ndt_status = 'unqualified', ndt_attempt_count = 2, is_terminated = 1, ndt_photo_paths = ?
+                        WHERE id = ?
+                    ''', (json.dumps(written_paths, ensure_ascii=False), exam['id']))
+                    msg = "探伤不合格，考试已终止"
+                    terminated = True
+
             conn.commit()
         except Exception:
             for path in written_paths:
@@ -2334,7 +2471,13 @@ async def complete_welding_ndt(
                     pass
             raise
 
-    return {"code": 200, "message": "探伤合格已保存" if result == 'qualified' else "探伤不合格已保存", "photo_count": len(written_paths)}
+    return {
+        "code": 200,
+        "message": msg,
+        "photo_count": len(written_paths),
+        "is_terminated": terminated,
+        "is_retake": is_retake_action and not terminated
+    }
 
 # 修改已录入的信息（仅能修改属于自己的记录）
 @app.post("/api/record/exit")
@@ -2823,17 +2966,32 @@ def get_all_records(start_date: str = None, end_date: str = None, company: str =
     normalized_status = (record_status or '').strip().lower()
     if normalized_status == 'exited':
         conditions.append("COALESCE(TRIM(r.exit_date), '') != ''")
-    elif normalized_status in ('qualified', 'unqualified'):
+    elif normalized_status == 'qualified':
         conditions.append('''
             (
-              SELECT w.result
+              SELECT CASE
+                WHEN w.result = 'qualified' AND w.ndt_status IN ('qualified', 'not_required') THEN 'qualified'
+                ELSE 'unqualified'
+              END
               FROM welding_skill_exams w
               WHERE w.record_id = r.id
               ORDER BY w.id DESC
               LIMIT 1
-            ) = ?
+            ) = 'qualified'
         ''')
-        params.append(normalized_status)
+    elif normalized_status == 'unqualified':
+        conditions.append('''
+            (
+              SELECT CASE
+                WHEN w.result = 'unqualified' OR (w.result = 'qualified' AND w.ndt_status = 'unqualified') THEN 'unqualified'
+                ELSE 'other'
+              END
+              FROM welding_skill_exams w
+              WHERE w.record_id = r.id
+              ORDER BY w.id DESC
+              LIMIT 1
+            ) = 'unqualified'
+        ''')
         
     where_clause = ""
     if conditions:
@@ -2854,6 +3012,8 @@ def get_all_records(start_date: str = None, end_date: str = None, company: str =
         SELECT r.*, u.real_name as recorder_name,
                (SELECT w.result FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_exam_result,
                 (SELECT w.ndt_status FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_status,
+                (SELECT w.ndt_attempt_count FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_attempt_count,
+                (SELECT w.is_terminated FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_is_terminated,
                 (SELECT COUNT(*) FROM welding_skill_exams w WHERE w.record_id = r.id) AS welding_exam_count,
                 (SELECT w.photo_paths FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_exam_photo_paths,
                 (SELECT w.ndt_photo_paths FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_photo_paths
@@ -2870,6 +3030,8 @@ def get_all_records(start_date: str = None, end_date: str = None, company: str =
         SELECT r.*, u.real_name as recorder_name,
                (SELECT w.result FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_exam_result,
                 (SELECT w.ndt_status FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_status,
+                (SELECT w.ndt_attempt_count FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_attempt_count,
+                (SELECT w.is_terminated FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_is_terminated,
                 (SELECT COUNT(*) FROM welding_skill_exams w WHERE w.record_id = r.id) AS welding_exam_count,
                 (SELECT w.photo_paths FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_exam_photo_paths,
                 (SELECT w.ndt_photo_paths FROM welding_skill_exams w WHERE w.record_id = r.id ORDER BY w.id DESC LIMIT 1) AS latest_welding_ndt_photo_paths

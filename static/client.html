@@ -1018,9 +1018,36 @@
     function historyExamSummary(row) {
       const result = row.latest_welding_exam_result;
       const ndt = row.latest_welding_ndt_status;
-      const examText = result === 'qualified' ? (ndt === 'pending' ? '合格·待探伤' : '合格') : (result === 'unqualified' ? (Number(row.welding_exam_count) >= 2 ? '不合格' : '待补考') : '未考试');
-      const ndtText = result !== 'qualified' ? '--' : (ndt === 'qualified' ? '探伤合格' : (ndt === 'unqualified' ? '探伤不合格' : (ndt === 'pending' ? '待探伤' : '无需探伤')));
-      const finalText = result === 'qualified' && ['qualified', 'not_required'].includes(ndt) ? '最终合格' : (result === 'qualified' ? '待探伤' : (result === 'unqualified' ? (Number(row.welding_exam_count) >= 2 ? '最终不合格' : '待补考') : '待考试'));
+      const examCount = Number(row.welding_exam_count || 0);
+      const isTerminated = Number(row.latest_welding_is_terminated || 0) === 1;
+      const ndtCount = Number(row.latest_welding_ndt_attempt_count || 0);
+
+      const examText = result === 'qualified'
+        ? (ndt === 'pending' ? '外观合格·待探伤' : '外观合格')
+        : (result === 'unqualified' ? (examCount >= 2 || isTerminated ? '外观不合格' : '待补考') : '未考试');
+
+      const ndtText = result !== 'qualified'
+        ? '--'
+        : (ndt === 'qualified'
+            ? '探伤合格'
+            : (ndt === 'unqualified'
+                ? '探伤不合格'
+                : (ndt === 'pending'
+                    ? (ndtCount >= 1 ? '待探伤补考' : '待探伤')
+                    : '无需探伤')));
+
+      const finalText = (result === 'qualified' && ndt === 'qualified')
+        ? '探伤合格'
+        : ((result === 'qualified' && ndt === 'not_required')
+            ? '外观合格'
+            : (result === 'qualified' && ndt === 'pending'
+                ? (ndtCount >= 1 ? '待探伤补考' : '待探伤')
+                : (result === 'qualified' && ndt === 'unqualified'
+                    ? '探伤不合格'
+                    : (result === 'unqualified'
+                        ? (examCount >= 2 || isTerminated ? '外观不合格' : '待补考')
+                        : '待考试'))));
+
       return { examText, ndtText, finalText };
     }
 
@@ -1114,15 +1141,51 @@
             const specialOperationCertificateUrls = certificatePhotos.specialOperationCertificate.map(toHistoryPhotoUrl);
             const idCardUrls = row.id_card ? [`/uploads/idcards/${encodeURIComponent(row.id_card)}.png?token=${encodeURIComponent(getSessionItem('token') || '')}`] : [];
             const recordLocked = row.latest_welding_exam_result === 'qualified' && ['qualified', 'not_required'].includes(row.latest_welding_ndt_status);
-            const examResultText = row.latest_welding_exam_result === 'qualified' ? (row.latest_welding_ndt_status === 'pending' ? '合格·待探伤' : '合格') : (row.latest_welding_exam_result === 'unqualified' ? (Number(row.welding_exam_count) >= 2 ? '不合格' : '待补考') : '未考试');
-            const ndtResultText = row.latest_welding_exam_result !== 'qualified' ? '--' : (row.latest_welding_ndt_status === 'qualified' ? '探伤合格' : (row.latest_welding_ndt_status === 'unqualified' ? '探伤不合格' : (row.latest_welding_ndt_status === 'pending' ? '待探伤' : '无需探伤')));
+            const examCount = Number(row.welding_exam_count || 0);
+            const isTerminated = Number(row.latest_welding_is_terminated || 0) === 1;
+            const ndtAttemptCount = Number(row.latest_welding_ndt_attempt_count || 0);
+            const examResult = row.latest_welding_exam_result;
+            const ndtStatus = row.latest_welding_ndt_status;
+
+            const examResultText = examResult === 'qualified'
+              ? (ndtStatus === 'pending' ? '合格·待探伤' : '合格')
+              : (examResult === 'unqualified' ? (examCount >= 2 || isTerminated ? '不合格' : '待补考') : '未考试');
+
+            const ndtResultText = examResult !== 'qualified'
+              ? '--'
+              : (ndtStatus === 'qualified'
+                  ? '探伤合格'
+                  : (ndtStatus === 'unqualified'
+                      ? '探伤不合格'
+                      : (ndtStatus === 'pending'
+                          ? (ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤')
+                          : '无需探伤')));
+
             let examAction;
-            if (isOwner && row.latest_welding_exam_result === 'qualified' && row.latest_welding_ndt_status === 'pending') {
-              examAction = `<button type="button" class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px;" onclick="startNdt(${row.id})">待探伤</button>`;
-            } else if (row.latest_welding_exam_result === 'qualified') {
-              examAction = `<button type="button" class="btn btn-success history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; opacity: 0.9; cursor: default;" disabled>合格</button>`;
-            } else if (row.latest_welding_exam_result === 'unqualified' && Number(row.welding_exam_count) >= 2) {
-              examAction = `<button type="button" class="btn btn-danger history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; opacity: 0.9; cursor: default;" disabled>不合格</button>`;
+            if (examResult === 'qualified') {
+              if (ndtStatus === 'not_required') {
+                examAction = `<button type="button" class="btn btn-success history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; opacity: 0.9; cursor: default;" disabled>外观合格</button>`;
+              } else if (ndtStatus === 'qualified') {
+                examAction = `<button type="button" class="btn btn-success history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; opacity: 0.9; cursor: default;" disabled>探伤合格</button>`;
+              } else if (ndtStatus === 'pending') {
+                if (isOwner) {
+                  const label = ndtAttemptCount >= 1 ? '探伤补考' : '待探伤';
+                  const btnClass = ndtAttemptCount >= 1 ? 'btn-warning' : 'btn-primary';
+                  examAction = `<button type="button" class="btn ${btnClass} history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px;" onclick="startNdt(${row.id})">${label}</button>`;
+                } else {
+                  examAction = `<button type="button" class="btn btn-secondary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; opacity: 0.9; cursor: default;" disabled>${ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤'}</button>`;
+                }
+              } else if (ndtStatus === 'unqualified') {
+                examAction = `<button type="button" class="btn btn-danger history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; opacity: 0.9; cursor: default;" disabled>探伤不合格</button>`;
+              } else {
+                examAction = `<button type="button" class="btn btn-success history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; opacity: 0.9; cursor: default;" disabled>外观合格</button>`;
+              }
+            } else if (examResult === 'unqualified') {
+              if (examCount >= 2 || isTerminated) {
+                examAction = `<button type="button" class="btn btn-danger history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; opacity: 0.9; cursor: default;" disabled>外观不合格</button>`;
+              } else {
+                examAction = `<button type="button" class="btn btn-secondary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; opacity: 0.9; cursor: default;" disabled>待补考</button>`;
+              }
             } else {
               examAction = '';
             }
