@@ -12,6 +12,9 @@ services:
       REDIS_URL: redis://hangong-redis:6379/0
       DB_PATH: hangong.db
     volumes:
+      - /opt/hangong/main.py:/app/main.py
+      - /opt/hangong/ocr_handler.py:/app/ocr_handler.py
+      - /opt/hangong/app:/app/app
       - /data/hangong/uploads:/app/uploads
       - /data/hangong/shiti:/app/shiti
       - /data/hangong/hangong.db:/app/hangong.db
@@ -29,6 +32,12 @@ services:
       REDIS_URL: redis://hangong-redis:6379/0
       DB_PATH: hangong.db
     volumes:
+      - /opt/hangong/main.py:/app/main.py
+      - /opt/hangong/ocr_handler.py:/app/ocr_handler.py
+      - /opt/hangong/start_server.py:/app/start_server.py
+      - /opt/hangong/app:/app/app
+      - /opt/hangong/static:/app/static
+      - /opt/hangong/templates:/app/templates
       - /data/hangong/uploads:/app/uploads
       - /data/hangong/shiti:/app/shiti
       - /data/hangong/hangong.db:/app/hangong.db
