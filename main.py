@@ -257,12 +257,12 @@ def _exam_conclusion(exam):
     if not exam:
         return ''
     if _row_value(exam, 'result') != 'qualified':
-        return '外观不合格'
+        return '不合格'
     ndt_status = _row_value(exam, 'ndt_status')
     if ndt_status == 'qualified':
-        return '探伤合格'
+        return '外观合格、探伤合格'
     if ndt_status == 'unqualified':
-        return '外观合格，探伤不合格'
+        return '外观合格、探伤不合格'
     if ndt_status == 'not_required':
         return '外观合格'
     return '外观合格，待探伤'
@@ -289,7 +289,7 @@ def _information_card_values(record, exam, work_dir):
         '<qx>': _row_value(exam, 'defect_issues') if exam else '',
         '<bk>': '是' if exam and (int(_row_value(exam, 'attempt_number', 0)) > 1 or int(_row_value(exam, 'ndt_attempt_count', 0)) > 1) else '否',
         '<ts>': '是' if exam and bool(_row_value(exam, 'ndt_required')) else '否',
-        '<jg>': '合格' if ndt_status == 'qualified' else ('不合格' if ndt_status == 'unqualified' else ''),
+        '<jg>': ('合格' if ndt_status == 'qualified' else ('不合格' if ndt_status == 'unqualified' else '')) if result == 'qualified' else '',
         '<jl>': _exam_conclusion(exam),
     }
     image_values = {

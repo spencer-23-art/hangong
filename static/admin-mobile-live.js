@@ -227,26 +227,43 @@
       if (r.latest_welding_ndt_status === 'not_required') {
         examAction = '<button class="small-action success-action" type="button" disabled>外观合格</button>';
       } else if (r.latest_welding_ndt_status === 'qualified') {
-        examAction = '<button class="small-action success-action" type="button" disabled>探伤合格</button>';
+        examAction = '<button class="small-action success-action" type="button" disabled>外观合格</button><button class="small-action success-action" type="button" disabled>探伤合格</button>';
       } else if (r.latest_welding_ndt_status === 'pending') {
-        examAction = '<button class="small-action" type="button" disabled>' + (ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤') + '</button>';
+        examAction = '<button class="small-action success-action" type="button" disabled>外观合格</button><button class="small-action" type="button" disabled>' + (ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤') + '</button>';
       } else if (r.latest_welding_ndt_status === 'unqualified') {
-        examAction = '<button class="small-action danger-action" type="button" disabled>探伤不合格</button>';
+        examAction = '<button class="small-action success-action" type="button" disabled>外观合格</button><button class="small-action danger-action" type="button" disabled>探伤不合格</button>';
       } else {
         examAction = '<button class="small-action success-action" type="button" disabled>外观合格</button>';
       }
     } else if (r.latest_welding_exam_result === 'unqualified') {
       if (examCount >= 2 || isTerminated) {
-        examAction = '<button class="small-action danger-action" type="button" disabled>外观不合格</button>';
+        examAction = '<button class="small-action danger-action" type="button" disabled>不合格</button>';
       } else {
         examAction = '<button class="small-action danger-action" type="button" onclick="startWeldingSkillExam(' + Number(r.id) + ')">补考</button>';
       }
     } else {
-      examAction = '<button class="small-action danger-action" type="button" onclick="startWeldingSkillExam(' + Number(r.id) + ')">' + (r.latest_welding_exam_result === 'unqualified' ? '补考' : '考试') + '</button>';
+      examAction = '<button class="small-action danger-action" type="button" onclick="startWeldingSkillExam(' + Number(r.id) + ')">考试</button>';
     }
+
+    var examDetailsHtml = '';
+    if (r.latest_welding_exam_result === 'qualified') {
+      examDetailsHtml += '<div><span>外观结果</span><strong style="color:var(--success-color,#10b981);">外观合格</strong></div>';
+      if (r.latest_welding_ndt_status === 'qualified') {
+        examDetailsHtml += '<div><span>探伤结果</span><strong style="color:var(--success-color,#10b981);">探伤合格</strong></div>';
+      } else if (r.latest_welding_ndt_status === 'unqualified') {
+        examDetailsHtml += '<div><span>探伤结果</span><strong style="color:var(--danger-color,#ef4444);">探伤不合格</strong></div>';
+      } else if (r.latest_welding_ndt_status === 'pending') {
+        examDetailsHtml += '<div><span>探伤结果</span><strong style="color:var(--warning-color,#f59e0b);">' + (ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤') + '</strong></div>';
+      }
+    } else if (r.latest_welding_exam_result === 'unqualified') {
+      examDetailsHtml += '<div><span>考试结果</span><strong style="color:var(--danger-color,#ef4444);">不合格</strong></div>';
+    } else {
+      examDetailsHtml += '<div><span>考试结果</span><strong>未考试</strong></div>';
+    }
+
     return '<article class="record-card ' + (downloaded ? 'is-downloaded' : '') + ' ' + (checked ? 'is-selected' : '') + '"><div class="record-head"><input class="record-select" type="checkbox" ' + (checked ? 'checked' : '') + ' aria-label="选择' + esc(r.name) + '" onchange="mobileAdminToggleRecord(' + Number(r.id) + ',this.checked)"><div class="person-line"><div class="person"><div class="avatar">' + esc(initials(r.name)) + '</div><div><div class="person-name">' + esc(r.name) + '</div><div class="person-meta">' + esc(r.gender || '--') + ' · ' + esc(r.age || '--') + '岁</div></div></div><span class="state-pill ' + (downloaded ? '' : 'warning') + '">' + (downloaded ? '已下载' : '待下载') + '</span></div></div>' +
       recordPhotoGallery(r) +
-      '<div class="record-details"><div><span>身份证号</span><strong>' + esc(r.id_card || '--') + '</strong></div><div><span>联系电话</span><strong>' + esc(r.phone || '--') + '</strong></div><div><span>培训单位</span><strong>' + esc(r.company || '--') + '</strong></div><div><span>岗位 / 区域</span><strong>' + esc(r.job || '--') + ' · ' + esc(r.region_auth || '--') + '</strong></div><div><span>班组</span><strong>' + esc(r.team || '--') + '</strong></div><div><span>考试项目</span><strong>' + esc(r.exam_project || '--') + '</strong></div><div><span>证件作业项</span><strong>' + esc(r.certificate_work_item || '--') + '</strong></div><div><span>证件有效期</span><strong>' + esc(r.certificate_expiry || '--') + '</strong></div><div><span>焊工代号</span><strong>' + esc(r.welder_code || '--') + '</strong></div><div><span>考试结果</span><strong>' + esc(examResult) + '</strong></div><div><span>探伤结果</span><strong>' + esc(ndtResult) + '</strong></div><div class="wide"><span>地址</span><strong>' + esc(r.address || '--') + '</strong></div></div>' +
+      '<div class="record-details"><div><span>身份证号</span><strong>' + esc(r.id_card || '--') + '</strong></div><div><span>联系电话</span><strong>' + esc(r.phone || '--') + '</strong></div><div><span>培训单位</span><strong>' + esc(r.company || '--') + '</strong></div><div><span>岗位 / 区域</span><strong>' + esc(r.job || '--') + ' · ' + esc(r.region_auth || '--') + '</strong></div><div><span>班组</span><strong>' + esc(r.team || '--') + '</strong></div><div><span>考试项目</span><strong>' + esc(r.exam_project || '--') + '</strong></div><div><span>证件作业项</span><strong>' + esc(r.certificate_work_item || '--') + '</strong></div><div><span>证件有效期</span><strong>' + esc(r.certificate_expiry || '--') + '</strong></div><div><span>焊工代号</span><strong>' + esc(r.welder_code || '--') + '</strong></div>' + examDetailsHtml + '<div class="wide"><span>地址</span><strong>' + esc(r.address || '--') + '</strong></div></div>' +
       '<div class="card-footer"><span class="record-time">录入 ' + esc(displayTime(r.created_at)) + '</span><span class="mobile-actions"><button class="small-action" type="button" onclick="openRecordDetail(' + Number(r.id) + ')">详情</button><button class="small-action" type="button" onclick="mobileAdminDownloadInformationCard(' + Number(r.id) + ',' + jsArg(r.name) + ')">信息卡</button>' + examAction + certificateAction + '<button class="small-action danger-action" type="button" onclick="deleteRecord(' + Number(r.id) + ')">删除</button></span></div></article>';
   }
   function recordPager() {
