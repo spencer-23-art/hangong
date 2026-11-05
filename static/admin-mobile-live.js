@@ -231,7 +231,11 @@
       } else if (r.latest_welding_ndt_status === 'pending') {
         examAction = '<button class="small-action success-action" type="button" disabled>外观合格</button><button class="small-action" type="button" disabled>' + (ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤') + '</button>';
       } else if (r.latest_welding_ndt_status === 'unqualified') {
-        examAction = '<button class="small-action success-action" type="button" disabled>外观合格</button><button class="small-action danger-action" type="button" disabled>探伤不合格</button>';
+        if (isTerminated) {
+          examAction = '<button class="small-action success-action" type="button" disabled>外观合格</button><button class="small-action danger-action" type="button" disabled>探伤不合格</button>';
+        } else {
+          examAction = '<button class="small-action warning-action" type="button" onclick="startWeldingSkillExam(' + Number(r.id) + ')">实操补考</button><button class="small-action danger-action" type="button" disabled>探伤不合格</button>';
+        }
       } else {
         examAction = '<button class="small-action success-action" type="button" disabled>外观合格</button>';
       }
@@ -251,7 +255,8 @@
       if (r.latest_welding_ndt_status === 'qualified') {
         examDetailsHtml += '<div><span>探伤结果</span><strong style="color:var(--success-color,#10b981);">探伤合格</strong></div>';
       } else if (r.latest_welding_ndt_status === 'unqualified') {
-        examDetailsHtml += '<div><span>探伤结果</span><strong style="color:var(--danger-color,#ef4444);">探伤不合格</strong></div>';
+        var ndtLabel = isTerminated ? '探伤不合格' : '探伤不合格（待实操补考）';
+        examDetailsHtml += '<div><span>探伤结果</span><strong style="color:var(--danger-color,#ef4444);">' + esc(ndtLabel) + '</strong></div>';
       } else if (r.latest_welding_ndt_status === 'pending') {
         examDetailsHtml += '<div><span>探伤结果</span><strong style="color:var(--warning-color,#f59e0b);">' + (ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤') + '</strong></div>';
       }

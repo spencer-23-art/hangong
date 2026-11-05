@@ -2244,9 +2244,16 @@ def get_welding_skill_exam_status(record_id: int, current_user = Depends(get_cur
         ndt_status = latest_exam.get('ndt_status', '') if latest_exam else ''
         ndt_attempt_count = int(latest_exam.get('ndt_attempt_count') or 0) if latest_exam else 0
 
-        # 外观考核资格：未终止，且只有0次记录（初考）或有1次不合格记录（补考）
+        # 外观考核资格：未终止，且满足：
+        # 1. 从未考核 (exam_count == 0)
+        # 2. 考过1次且外观不合格 (补考实操)
+        # 3. 考过1次且探伤不合格重来 (exam_count == 1 and ndt_status == 'unqualified')
         can_exam = not is_terminated and (
-            exam_count == 0 or (exam_count == 1 and latest_result == 'unqualified')
+            exam_count == 0 or (
+                exam_count == 1 and (
+                    latest_result == 'unqualified' or (latest_result == 'qualified' and ndt_status == 'unqualified')
+                )
+            )
         )
         is_exam_retake = exam_count >= 1
 
@@ -2258,7 +2265,7 @@ def get_welding_skill_exam_status(record_id: int, current_user = Depends(get_cur
             and not is_terminated
             and ndt_attempt_count < 2
         )
-        is_ndt_retake = ndt_attempt_count >= 1
+        is_ndt_retake = ndt_attempt_count >= 1 or exam_count >= 2
 
         return {
             "code": 200,
@@ -2329,14 +2336,16 @@ async def save_welding_skill_exam(
             raise HTTPException(status_code=404, detail="人员记录不存在")
 
         cursor.execute(
-            "SELECT result, is_terminated FROM welding_skill_exams WHERE record_id = ? ORDER BY id ASC",
+            "SELECT result, ndt_required, ndt_status, is_terminated FROM welding_skill_exams WHERE record_id = ? ORDER BY id ASC",
             (record_id,)
         )
         prior_attempts = [dict(r) for r in cursor.fetchall()]
         if len(prior_attempts) >= 2 or any(p.get('is_terminated') for p in prior_attempts):
             raise HTTPException(status_code=409, detail="该人员已无考核机会或考核已终止")
-        if prior_attempts and prior_attempts[-1]['result'] == 'qualified':
-            raise HTTPException(status_code=409, detail="该人员考试已合格，不能再次参加考试")
+        if prior_attempts:
+            last = prior_attempts[-1]
+            if last['result'] == 'qualified' and (last.get('ndt_status') in ('qualified', 'pending', 'not_required') or last.get('is_terminated')):
+                raise HTTPException(status_code=409, detail="该人员考试已合格或考核已结束，不能再次参加考试")
 
         # 补考不合格直接终止，或者初考不合格选取消直接终止
         terminated_flag = 1 if (force_terminate or (result == 'unqualified' and len(prior_attempts) >= 1)) else 0
@@ -2441,19 +2450,24 @@ async def complete_welding_ndt(
                 ''', (current_attempt + 1, json.dumps(written_paths, ensure_ascii=False), exam['id']))
                 msg = "探伤合格已保存"
                 terminated = False
+                redirect_to_exam = False
             else:
                 # 探伤不合格
-                if current_attempt == 0 and is_retake_action and not force_terminate:
-                    # 初次探伤不合格，选择补考：状态保持 pending，尝试次数记 1，允许继续补考
+                cursor.execute("SELECT count(*) as total FROM welding_skill_exams WHERE record_id = ?", (record_id,))
+                total_exams = (cursor.fetchone() or {})['total'] or 1
+
+                if total_exams <= 1 and is_retake_action and not force_terminate:
+                    # 初次探伤不合格，选择重来：记录探伤不合格，未终止，允许重走实操外观考试
                     cursor.execute('''
                         UPDATE welding_skill_exams
-                        SET ndt_status = 'pending', ndt_attempt_count = 1, is_terminated = 0, ndt_photo_paths = ?
+                        SET ndt_status = 'unqualified', ndt_attempt_count = 1, is_terminated = 0, ndt_photo_paths = ?
                         WHERE id = ?
                     ''', (json.dumps(written_paths, ensure_ascii=False), exam['id']))
-                    msg = "初次探伤不合格已记录，现进入探伤补考"
+                    msg = "初次探伤不合格已记录，现进入重新实操外观考试"
                     terminated = False
+                    redirect_to_exam = True
                 else:
-                    # 初次探伤选取消，或者补考不合格：直接终止！
+                    # 初次探伤选取消，或者重考后探伤仍不合格：直接终止！
                     cursor.execute('''
                         UPDATE welding_skill_exams
                         SET ndt_status = 'unqualified', ndt_attempt_count = 2, is_terminated = 1, ndt_photo_paths = ?
@@ -2461,6 +2475,7 @@ async def complete_welding_ndt(
                     ''', (json.dumps(written_paths, ensure_ascii=False), exam['id']))
                     msg = "探伤不合格，考试已终止"
                     terminated = True
+                    redirect_to_exam = False
 
             conn.commit()
         except Exception:
@@ -2476,7 +2491,7 @@ async def complete_welding_ndt(
         "message": msg,
         "photo_count": len(written_paths),
         "is_terminated": terminated,
-        "is_retake": is_retake_action and not terminated
+        "redirect_to_exam": redirect_to_exam
     }
 
 # 修改已录入的信息（仅能修改属于自己的记录）

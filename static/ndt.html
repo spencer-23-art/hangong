@@ -31,10 +31,10 @@
   <div class="ndt-choice" id="ndt-retake-choice" style="position:fixed; inset:0; z-index:15; display:none; place-items:center; padding:20px; background:rgba(2,6,23,.72);">
     <div style="width:min(100%,360px); padding:20px; border:1px solid var(--line); border-radius:14px; background:var(--panel); text-align:center;">
       <h3 style="margin:0 0 8px; font-size:18px; color:#f8fafc;">探伤检测不合格</h3>
-      <p style="margin:0 0 16px; color:var(--muted); font-size:14px;">本次探伤检测不合格。该人员有一次探伤补考机会，是否进行补考？</p>
+      <p style="margin:0 0 16px; color:var(--muted); font-size:14px; line-height:1.5;">本次探伤检测不合格。<br>补考需<strong>重新进行实操外观考试</strong>（仅有一次机会），是否重新开始实操外观考试？</p>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-        <button id="ndt-retake-cancel" type="button" style="min-height:42px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.1); color:var(--text); font-weight:700; cursor:pointer;">取消</button>
-        <button id="ndt-retake-confirm" type="button" style="min-height:42px; border:0; border-radius:9px; background:var(--blue); color:#fff; font-weight:700; cursor:pointer;">补考</button>
+        <button id="ndt-retake-cancel" type="button" style="min-height:42px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.1); color:var(--text); font-weight:700; cursor:pointer;">取消(终止)</button>
+        <button id="ndt-retake-confirm" type="button" style="min-height:42px; border:0; border-radius:9px; background:var(--blue); color:#fff; font-weight:700; cursor:pointer;">重新实操考试</button>
       </div>
     </div>
   </div>
@@ -129,7 +129,7 @@
       resultActions.classList.add('visible');
       setNotice(`已确认 ${photos.length} 张探伤照片。`, 'success');
     }
-    async function submitNdt(result, action = 'submit', isTerminated = false, continueInPage = false) {
+    async function submitNdt(result, action = 'submit', isTerminated = false) {
       const formData = new FormData();
       formData.append('record_id', String(recordId));
       formData.append('result', result);
@@ -146,16 +146,9 @@
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.detail || '探伤保存失败，请重试');
 
-        if (continueInPage) {
-          photos.splice(0, photos.length).forEach(p => URL.revokeObjectURL(p.url));
-          confirmed = false;
-          document.getElementById('confirmed-note').style.display = 'none';
-          resultActions.classList.remove('visible');
-          ndtAttemptCount = 1;
-          isNdtRetake = true;
-          updateNdtSubtitle();
-          renderPhotos();
-          setNotice(payload.message || '初次探伤不合格已记录。现进入探伤补考，请重新拍摄照片。', 'success');
+        if (payload.redirect_to_exam) {
+          setNotice(payload.message || '初次探伤不合格已记录。现为您跳转到实操外观重新考试…', 'success');
+          setTimeout(() => location.replace(`/static/welding_skill_exam.html?record_id=${recordId}&retake_from_ndt=1`), 900);
           return;
         }
 
@@ -201,21 +194,21 @@
     cameraInput.addEventListener('change', addPhoto);
     albumInput.addEventListener('change', addPhoto);
     confirmButton.addEventListener('click', confirmPhotos);
-    document.getElementById('complete-qualified').addEventListener('click', () => submitNdt('qualified', 'submit', false, false));
+    document.getElementById('complete-qualified').addEventListener('click', () => submitNdt('qualified', 'submit', false));
     document.getElementById('complete-unqualified').addEventListener('click', () => {
       if (!isNdtRetake && ndtAttemptCount === 0) {
         document.getElementById('ndt-retake-choice').style.display = 'grid';
       } else {
-        submitNdt('unqualified', 'submit', true, false);
+        submitNdt('unqualified', 'submit', true);
       }
     });
     document.getElementById('ndt-retake-cancel').addEventListener('click', () => {
       document.getElementById('ndt-retake-choice').style.display = 'none';
-      submitNdt('unqualified', 'submit', true, false);
+      submitNdt('unqualified', 'submit', true);
     });
     document.getElementById('ndt-retake-confirm').addEventListener('click', () => {
       document.getElementById('ndt-retake-choice').style.display = 'none';
-      submitNdt('unqualified', 'retake', false, true);
+      submitNdt('unqualified', 'retake', false);
     });
 
     initNdtPage();

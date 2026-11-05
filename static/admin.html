@@ -2582,7 +2582,11 @@
           } else if (ndtStatus === 'pending') {
             weldingExamAction = `<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;"><button class="btn btn-success" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>外观合格</button><button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>${ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤'}</button></div>`;
           } else if (ndtStatus === 'unqualified') {
-            weldingExamAction = '<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;"><button class="btn btn-success" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>外观合格</button><button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>探伤不合格</button></div>';
+            if (isTerminated) {
+              weldingExamAction = '<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;"><button class="btn btn-success" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>外观合格</button><button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>探伤不合格</button></div>';
+            } else {
+              weldingExamAction = `<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;"><button class="btn btn-warning" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" onclick="startWeldingSkillExam(${r.id})">实操补考</button><button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>探伤不合格</button></div>`;
+            }
           } else {
             weldingExamAction = '<button class="btn btn-success" style="padding: 4px 8px; font-size: 0.8rem; width: auto; margin-left: 0;" disabled>外观合格</button>';
           }
@@ -2602,7 +2606,8 @@
           if (ndtStatus === 'qualified') {
             examResultItemsHtml += `<div class="admin-history-info-item"><span class="admin-history-info-label">探伤结果</span><span class="admin-history-info-value" style="color:var(--success-color, #10b981);font-weight:600;">探伤合格</span></div>`;
           } else if (ndtStatus === 'unqualified') {
-            examResultItemsHtml += `<div class="admin-history-info-item"><span class="admin-history-info-label">探伤结果</span><span class="admin-history-info-value" style="color:var(--danger-color, #ef4444);font-weight:600;">探伤不合格</span></div>`;
+            const ndtLabel = isTerminated ? '探伤不合格' : '探伤不合格（待实操补考）';
+            examResultItemsHtml += `<div class="admin-history-info-item"><span class="admin-history-info-label">探伤结果</span><span class="admin-history-info-value" style="color:var(--danger-color, #ef4444);font-weight:600;">${ndtLabel}</span></div>`;
           } else if (ndtStatus === 'pending') {
             examResultItemsHtml += `<div class="admin-history-info-item"><span class="admin-history-info-label">探伤结果</span><span class="admin-history-info-value" style="color:var(--warning-color, #f59e0b);font-weight:600;">${ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤'}</span></div>`;
           }

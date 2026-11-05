@@ -1171,7 +1171,11 @@
                   : `<button type="button" class="btn btn-secondary history-card-action-button" style="padding: 5px 8px; font-size: 0.8rem; margin: 0; width: auto; opacity: 0.9; cursor: default;" disabled>${label}</button>`;
                 examAction = `<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;"><button type="button" class="btn btn-success history-card-action-button" style="padding: 5px 8px; font-size: 0.8rem; margin: 0; width: auto; opacity: 0.9; cursor: default;" disabled>外观合格</button>${ndtBtn}</div>`;
               } else if (ndtStatus === 'unqualified') {
-                examAction = `<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;"><button type="button" class="btn btn-success history-card-action-button" style="padding: 5px 8px; font-size: 0.8rem; margin: 0; width: auto; opacity: 0.9; cursor: default;" disabled>外观合格</button><button type="button" class="btn btn-danger history-card-action-button" style="padding: 5px 8px; font-size: 0.8rem; margin: 0; width: auto; opacity: 0.9; cursor: default;" disabled>探伤不合格</button></div>`;
+                if (isTerminated) {
+                  examAction = `<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;"><button type="button" class="btn btn-success history-card-action-button" style="padding: 5px 8px; font-size: 0.8rem; margin: 0; width: auto; opacity: 0.9; cursor: default;" disabled>外观合格</button><button type="button" class="btn btn-danger history-card-action-button" style="padding: 5px 8px; font-size: 0.8rem; margin: 0; width: auto; opacity: 0.9; cursor: default;" disabled>探伤不合格</button></div>`;
+                } else {
+                  examAction = `<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;"><button type="button" class="btn btn-warning history-card-action-button" style="padding: 5px 8px; font-size: 0.8rem; margin: 0; width: auto; opacity: 0.9; cursor: default;" disabled>待实操补考</button><button type="button" class="btn btn-danger history-card-action-button" style="padding: 5px 8px; font-size: 0.8rem; margin: 0; width: auto; opacity: 0.9; cursor: default;" disabled>探伤不合格</button></div>`;
+                }
               } else {
                 examAction = `<button type="button" class="btn btn-success history-card-action-button" style="padding: 5px 10px; font-size: 0.8rem; margin: 0; width: auto; opacity: 0.9; cursor: default;" disabled>外观合格</button>`;
               }
@@ -1187,7 +1191,8 @@
               if (ndtStatus === 'qualified') {
                 examResultItemsHtml += `<div class="history-info-item"><span class="history-info-label">探伤结果</span><span class="history-info-value" style="color:var(--success-color, #10b981);font-weight:600;">探伤合格</span></div>`;
               } else if (ndtStatus === 'unqualified') {
-                examResultItemsHtml += `<div class="history-info-item"><span class="history-info-label">探伤结果</span><span class="history-info-value" style="color:var(--danger-color, #ef4444);font-weight:600;">探伤不合格</span></div>`;
+                const ndtLabel = isTerminated ? '探伤不合格' : '探伤不合格（待实操补考）';
+                examResultItemsHtml += `<div class="history-info-item"><span class="history-info-label">探伤结果</span><span class="history-info-value" style="color:var(--danger-color, #ef4444);font-weight:600;">${ndtLabel}</span></div>`;
               } else if (ndtStatus === 'pending') {
                 examResultItemsHtml += `<div class="history-info-item"><span class="history-info-label">探伤结果</span><span class="history-info-value" style="color:var(--warning-color, #f59e0b);font-weight:600;">${ndtAttemptCount >= 1 ? '待探伤补考' : '待探伤'}</span></div>`;
               }
