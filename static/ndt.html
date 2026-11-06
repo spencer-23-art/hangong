@@ -32,8 +32,13 @@
     <div style="width:min(100%,360px); padding:20px; border:1px solid var(--line); border-radius:14px; background:var(--panel); text-align:center;">
       <h3 style="margin:0 0 8px; font-size:18px; color:#f8fafc;">探伤检测不合格</h3>
       <p style="margin:0 0 16px; color:var(--muted); font-size:14px; line-height:1.5;">本次探伤检测不合格。<br>补考需<strong>重新进行实操外观考试</strong>（仅有一次机会），是否重新开始实操外观考试？</p>
+      <div id="ndt-cancel-reason-box" style="display:none; margin-bottom:14px; text-align:left;">
+        <label for="ndt-cancel-reason" style="display:block; margin-bottom:6px; font-size:13px; color:var(--text);">放弃补考理由 *</label>
+        <textarea id="ndt-cancel-reason" maxlength="1000" style="width:100%; min-height:76px; resize:vertical; padding:10px; border:1px solid var(--line); border-radius:9px; background:#0b1220; color:var(--text); font:inherit;" placeholder="请填写焊工放弃补考的理由（必填）"></textarea>
+        <p id="ndt-cancel-reason-error" style="display:none; margin:6px 0 0; font-size:12px; color:#fca5a5;">请先填写放弃补考理由</p>
+      </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-        <button id="ndt-retake-cancel" type="button" style="min-height:42px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.1); color:var(--text); font-weight:700; cursor:pointer;">取消(终止)</button>
+        <button id="ndt-retake-cancel" type="button" style="min-height:42px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.1); color:var(--text); font-weight:700; cursor:pointer;">取消(放弃补考)</button>
         <button id="ndt-retake-confirm" type="button" style="min-height:42px; border:0; border-radius:9px; background:var(--blue); color:#fff; font-weight:700; cursor:pointer;">重新实操考试</button>
       </div>
     </div>
@@ -129,12 +134,13 @@
       resultActions.classList.add('visible');
       setNotice(`已确认 ${photos.length} 张探伤照片。`, 'success');
     }
-    async function submitNdt(result, action = 'submit', isTerminated = false) {
+    async function submitNdt(result, action = 'submit', isTerminated = false, cancelReason = '') {
       const formData = new FormData();
       formData.append('record_id', String(recordId));
       formData.append('result', result);
       formData.append('action', action);
       formData.append('is_terminated', String(isTerminated));
+      formData.append('cancel_reason', cancelReason);
       photos.forEach((photo, index) => formData.append('photos', photo.blob, photo.filename || `ndt_${index + 1}.jpg`));
       document.getElementById('saving').classList.add('visible');
       try {
@@ -197,14 +203,36 @@
     document.getElementById('complete-qualified').addEventListener('click', () => submitNdt('qualified', 'submit', false));
     document.getElementById('complete-unqualified').addEventListener('click', () => {
       if (!isNdtRetake && ndtAttemptCount === 0) {
+        document.getElementById('ndt-cancel-reason-box').style.display = 'none';
+        document.getElementById('ndt-cancel-reason-error').style.display = 'none';
+        document.getElementById('ndt-retake-cancel').textContent = '取消(放弃补考)';
+        document.getElementById('ndt-retake-cancel').style.background = 'rgba(255,255,255,.1)';
         document.getElementById('ndt-retake-choice').style.display = 'grid';
       } else {
         submitNdt('unqualified', 'submit', true);
       }
     });
     document.getElementById('ndt-retake-cancel').addEventListener('click', () => {
+      const cancelBox = document.getElementById('ndt-cancel-reason-box');
+      const cancelInput = document.getElementById('ndt-cancel-reason');
+      const cancelErr = document.getElementById('ndt-cancel-reason-error');
+      if (cancelBox.style.display === 'none') {
+        cancelBox.style.display = 'block';
+        document.getElementById('ndt-retake-cancel').textContent = '确认放弃补考';
+        document.getElementById('ndt-retake-cancel').style.background = '#ef4444';
+        document.getElementById('ndt-retake-cancel').style.borderColor = '#ef4444';
+        cancelInput.focus();
+        return;
+      }
+      const reason = cancelInput.value.trim();
+      if (!reason) {
+        cancelErr.style.display = 'block';
+        cancelInput.focus();
+        return;
+      }
+      cancelErr.style.display = 'none';
       document.getElementById('ndt-retake-choice').style.display = 'none';
-      submitNdt('unqualified', 'submit', true);
+      submitNdt('unqualified', 'submit', true, reason);
     });
     document.getElementById('ndt-retake-confirm').addEventListener('click', () => {
       document.getElementById('ndt-retake-choice').style.display = 'none';

@@ -2616,6 +2616,9 @@
         } else {
           examResultItemsHtml += `<div class="admin-history-info-item"><span class="admin-history-info-label">考试结果</span><span class="admin-history-info-value" style="color:var(--text-muted, #94a3b8);">未考试</span></div>`;
         }
+        if (r.latest_welding_cancel_reason) {
+          examResultItemsHtml += `<div class="admin-history-info-item"><span class="admin-history-info-label">放弃补考理由</span><span class="admin-history-info-value" style="color:var(--danger-color, #ef4444);font-weight:600;" title="${escapeHtml(r.latest_welding_cancel_reason)}">${escapeHtml(r.latest_welding_cancel_reason)}</span></div>`;
+        }
         tr.innerHTML = `
           <td style="text-align: center;"><input type="checkbox" class="record-checkbox" value="${r.id}" ${checkedAttr} onchange="handleSingleCheckboxChange(this, ${r.id})" onclick="event.stopPropagation()" style="width: 18px; height: 18px; cursor: pointer;"></td>
           <td style="vertical-align: top;">
@@ -3268,7 +3271,7 @@
                         ? '不合格'
                         : '待考试'))));
       const entryComplete = record.name && record.id_card && record.phone && record.address && record.job && record.region_auth && record.photo_path;
-      const typeFor = (value) => value.includes('合格') && !value.includes('不合格') ? 'success' : (value.includes('待') || value === '--' ? 'warning' : (value.includes('不合格') ? 'danger' : ''));
+      const typeFor = (value, label) => label === '放弃补考理由' ? 'danger' : (value.includes('合格') && !value.includes('不合格') ? 'success' : (value.includes('待') || value === '--' ? 'warning' : (value.includes('不合格') ? 'danger' : '')));
       const cells = [
         ['录入状态', entryComplete ? '资料完整' : '资料待补']
       ];
@@ -3282,6 +3285,9 @@
       } else {
         cells.push(['考试结果', '未考试']);
       }
+      if (record.latest_welding_cancel_reason) {
+        cells.push(['放弃补考理由', record.latest_welding_cancel_reason]);
+      }
       cells.push(
         ['最终状态', finalText],
         ['考试次数', `${Number(record.welding_exam_count || 0)} 次`],
@@ -3290,7 +3296,7 @@
         ['退场日期', record.exit_date || '--']
       );
       const grid = document.getElementById('detail-status-grid');
-      if (grid) grid.innerHTML = cells.map(([label, value]) => `<div class="detail-status-item ${typeFor(String(value))}"><span>${escapeHtml(label)}</span><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong></div>`).join('');
+      if (grid) grid.innerHTML = cells.map(([label, value]) => `<div class="detail-status-item ${typeFor(String(value), label)}"><span>${escapeHtml(label)}</span><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong></div>`).join('');
     }
 
     function openRecordDetail(id) {

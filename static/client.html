@@ -1073,6 +1073,9 @@
       } else {
         statusItems.push(['考试结果', '未考试']);
       }
+      if (row.latest_welding_cancel_reason) {
+        statusItems.push(['放弃补考理由', row.latest_welding_cancel_reason]);
+      }
       statusItems.push(
         ['最终状态', summary.finalText],
         ['考试次数', `${Number(row.welding_exam_count || 0)} 次`],
@@ -1150,9 +1153,10 @@
             const welderCertificateUrls = certificatePhotos.welderCertificate.map(toHistoryPhotoUrl);
             const specialOperationCertificateUrls = certificatePhotos.specialOperationCertificate.map(toHistoryPhotoUrl);
             const idCardUrls = row.id_card ? [`/uploads/idcards/${encodeURIComponent(row.id_card)}.png?token=${encodeURIComponent(getSessionItem('token') || '')}`] : [];
-            const recordLocked = row.latest_welding_exam_result === 'qualified' && ['qualified', 'not_required'].includes(row.latest_welding_ndt_status);
+            const isQualified = row.latest_welding_exam_result === 'qualified' && ['qualified', 'not_required'].includes(row.latest_welding_ndt_status);
             const examCount = Number(row.welding_exam_count || 0);
             const isTerminated = Number(row.latest_welding_is_terminated || 0) === 1;
+            const recordLocked = isQualified || isTerminated;
             const ndtAttemptCount = Number(row.latest_welding_ndt_attempt_count || 0);
             const examResult = row.latest_welding_exam_result;
             const ndtStatus = row.latest_welding_ndt_status;
@@ -1201,6 +1205,9 @@
             } else {
               examResultItemsHtml += `<div class="history-info-item"><span class="history-info-label">考试结果</span><span class="history-info-value" style="color:var(--text-muted, #94a3b8);">未考试</span></div>`;
             }
+            if (row.latest_welding_cancel_reason) {
+              examResultItemsHtml += `<div class="history-info-item"><span class="history-info-label">放弃补考理由</span><span class="history-info-value" style="color:var(--danger-color, #ef4444);font-weight:600;" title="${escapeHtml(row.latest_welding_cancel_reason)}">${escapeHtml(row.latest_welding_cancel_reason)}</span></div>`;
+            }
             tr.innerHTML = `
               <td class="history-select-cell" style="text-align:center; vertical-align:top;"><input type="checkbox" class="history-checkbox" value="${row.id}" ${selectedHistoryRecordIds.has(row.id) ? 'checked' : ''} aria-label="选择${escapeHtml(row.name)}" onchange="handleHistoryCheckboxChange(this, ${row.id})" style="width:18px;height:18px;cursor:pointer;"></td>
               <td class="history-photo-cell" style="vertical-align: top;">
@@ -1238,7 +1245,7 @@
                   <button class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; box-sizing: border-box;" onclick="openClientRecordDetail(${row.id})">详情</button>
                   <button class="btn btn-primary history-card-action-button" style="padding: 5px 12px; font-size: 0.8rem; margin: 0; width: auto; min-width: 60px; box-sizing: border-box;" onclick="downloadInfoCard(${row.id})">信息卡下载</button>
                   ${examAction}
-                  ${isOwner && recordLocked ? (row.exit_date ? `<span class="history-exit-control"><span style="color:var(--text-muted);font-size:.76rem;">退场</span><strong style="font-size:.78rem;">${escapeHtml(row.exit_date)}</strong></span>` : `<span class="history-exit-control"><input id="exit-date-${row.id}" class="form-control history-exit-date" type="date"><button class="btn btn-danger history-card-action-button" style="padding:5px 9px;font-size:.76rem;margin:0;width:auto;min-width:48px;" onclick="setRecordExit(${row.id})">退场</button></span>`) : ''}
+                  ${isOwner && isQualified ? (row.exit_date ? `<span class="history-exit-control"><span style="color:var(--text-muted);font-size:.76rem;">退场</span><strong style="font-size:.78rem;">${escapeHtml(row.exit_date)}</strong></span>` : `<span class="history-exit-control"><input id="exit-date-${row.id}" class="form-control history-exit-date" type="date"><button class="btn btn-danger history-card-action-button" style="padding:5px 9px;font-size:.76rem;margin:0;width:auto;min-width:48px;" onclick="setRecordExit(${row.id})">退场</button></span>`) : ''}
                 </div>
               </td>
             `;
@@ -1485,6 +1492,12 @@
     function editRecord(id) {
       const record = historyData.find(r => r.id === id);
       if (!record) return;
+      const isQualified = record.latest_welding_exam_result === 'qualified' && ['qualified', 'not_required'].includes(record.latest_welding_ndt_status);
+      const isTerminated = Number(record.latest_welding_is_terminated || 0) === 1;
+      if (isQualified || isTerminated) {
+        showAlert('error', '该人员信息已锁定，不能修改');
+        return;
+      }
 
       currentEditRecordId = id;
 

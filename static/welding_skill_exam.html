@@ -76,7 +76,21 @@
     <p class="notice" id="notice"></p>
   </main>
   <div class="ndt-choice" id="ndt-choice"><div class="ndt-choice-card"><h3>外观检测合格</h3><p>本次焊接是否需要探伤？</p><div class="ndt-choice-actions"><button class="ndt-no" id="ndt-no" type="button">不需要</button><button class="ndt-yes" id="ndt-yes" type="button">需要探伤</button></div></div></div>
-  <div class="retake-choice" id="retake-choice"><div class="retake-choice-card"><h3>外观检测不合格</h3><p id="retake-tip">本次外观检测不合格。该人员有一次补考机会，是否进行补考？</p><div class="retake-choice-actions"><button class="retake-cancel" id="retake-cancel" type="button">取消</button><button class="retake-confirm" id="retake-confirm" type="button">补考</button></div></div></div>
+  <div class="retake-choice" id="retake-choice">
+    <div class="retake-choice-card">
+      <h3>外观检测不合格</h3>
+      <p id="retake-tip">本次外观检测不合格。该人员有一次补考机会，是否进行补考？</p>
+      <div id="cancel-reason-box" style="display:none; margin-bottom:14px; text-align:left;">
+        <label for="cancel-reason" style="display:block; margin-bottom:6px; font-size:13px; color:var(--text);">放弃补考理由 *</label>
+        <textarea id="cancel-reason" maxlength="1000" style="min-height:76px;" placeholder="请填写焊工放弃补考的理由（必填）"></textarea>
+        <p id="cancel-reason-error" style="display:none; margin:6px 0 0; font-size:12px; color:#fca5a5;">请先填写放弃补考理由</p>
+      </div>
+      <div class="retake-choice-actions">
+        <button class="retake-cancel" id="retake-cancel" type="button">取消(放弃补考)</button>
+        <button class="retake-confirm" id="retake-confirm" type="button">补考</button>
+      </div>
+    </div>
+  </div>
   <div class="saving" id="saving"><div>正在保存考试记录，请稍候…</div></div>
 
   <script>
@@ -192,13 +206,14 @@
       updatePhotoList();
       setNotice(`已确认 ${photos.length} 张实操照片。`, 'success');
     }
-    async function submitExam(result, requiresNdt = false, isTerminated = false, continueInPage = false) {
+    async function submitExam(result, requiresNdt = false, isTerminated = false, continueInPage = false, cancelReason = '') {
       const defects = document.getElementById('defect-issues').value.trim();
       if (result === 'unqualified' && !defects) { setNotice('请填写缺陷问题。', 'error'); return; }
       const formData = new FormData();
       formData.append('record_id', String(recordId));
       formData.append('result', result);
       formData.append('defect_issues', defects);
+      formData.append('cancel_reason', cancelReason);
       formData.append('requires_ndt', String(requiresNdt));
       formData.append('is_terminated', String(isTerminated));
       photos.forEach((photo, index) => formData.append('photos', photo.blob, photo.filename || `welding_exam_${index + 1}.jpg`));
@@ -283,14 +298,35 @@
       const defects = document.getElementById('defect-issues').value.trim();
       if (!defects) { setNotice('请填写缺陷问题。', 'error'); return; }
       if (!isExamRetake && examAttemptCount === 0) {
+        document.getElementById('cancel-reason-box').style.display = 'none';
+        document.getElementById('cancel-reason-error').style.display = 'none';
+        document.getElementById('retake-cancel').textContent = '取消(放弃补考)';
         document.getElementById('retake-choice').classList.add('visible');
       } else {
         submitExam('unqualified', false, true, false);
       }
     });
     document.getElementById('retake-cancel').addEventListener('click', () => {
+      const cancelBox = document.getElementById('cancel-reason-box');
+      const cancelInput = document.getElementById('cancel-reason');
+      const cancelErr = document.getElementById('cancel-reason-error');
+      if (cancelBox.style.display === 'none') {
+        cancelBox.style.display = 'block';
+        document.getElementById('retake-cancel').textContent = '确认放弃补考';
+        document.getElementById('retake-cancel').style.background = 'var(--red)';
+        document.getElementById('retake-cancel').style.borderColor = 'var(--red)';
+        cancelInput.focus();
+        return;
+      }
+      const reason = cancelInput.value.trim();
+      if (!reason) {
+        cancelErr.style.display = 'block';
+        cancelInput.focus();
+        return;
+      }
+      cancelErr.style.display = 'none';
       document.getElementById('retake-choice').classList.remove('visible');
-      submitExam('unqualified', false, true, false);
+      submitExam('unqualified', false, true, false, reason);
     });
     document.getElementById('retake-confirm').addEventListener('click', () => {
       document.getElementById('retake-choice').classList.remove('visible');

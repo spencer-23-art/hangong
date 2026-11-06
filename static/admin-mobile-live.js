@@ -265,6 +265,9 @@
     } else {
       examDetailsHtml += '<div><span>考试结果</span><strong>未考试</strong></div>';
     }
+    if (r.latest_welding_cancel_reason) {
+      examDetailsHtml += '<div><span>放弃补考理由</span><strong style="color:var(--danger-color,#ef4444);">' + esc(r.latest_welding_cancel_reason) + '</strong></div>';
+    }
 
     return '<article class="record-card ' + (downloaded ? 'is-downloaded' : '') + ' ' + (checked ? 'is-selected' : '') + '"><div class="record-head"><input class="record-select" type="checkbox" ' + (checked ? 'checked' : '') + ' aria-label="选择' + esc(r.name) + '" onchange="mobileAdminToggleRecord(' + Number(r.id) + ',this.checked)"><div class="person-line"><div class="person"><div class="avatar">' + esc(initials(r.name)) + '</div><div><div class="person-name">' + esc(r.name) + '</div><div class="person-meta">' + esc(r.gender || '--') + ' · ' + esc(r.age || '--') + '岁</div></div></div><span class="state-pill ' + (downloaded ? '' : 'warning') + '">' + (downloaded ? '已下载' : '待下载') + '</span></div></div>' +
       recordPhotoGallery(r) +
