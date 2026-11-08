@@ -1155,9 +1155,9 @@
             const idCardUrls = row.id_card ? [`/uploads/idcards/${encodeURIComponent(row.id_card)}.png?token=${encodeURIComponent(getSessionItem('token') || '')}`] : [];
             const isQualified = row.latest_welding_exam_result === 'qualified' && ['qualified', 'not_required'].includes(row.latest_welding_ndt_status);
             const examCount = Number(row.welding_exam_count || 0);
-            const isTerminated = Number(row.latest_welding_is_terminated || 0) === 1;
-            const recordLocked = isQualified || isTerminated;
             const ndtAttemptCount = Number(row.latest_welding_ndt_attempt_count || 0);
+            const isTerminated = Number(row.latest_welding_is_terminated || 0) === 1 || (examCount >= 2 && !isQualified) || (row.latest_welding_ndt_status === 'unqualified' && ndtAttemptCount === 0);
+            const recordLocked = isQualified || isTerminated;
             const examResult = row.latest_welding_exam_result;
             const ndtStatus = row.latest_welding_ndt_status;
 
@@ -1493,7 +1493,9 @@
       const record = historyData.find(r => r.id === id);
       if (!record) return;
       const isQualified = record.latest_welding_exam_result === 'qualified' && ['qualified', 'not_required'].includes(record.latest_welding_ndt_status);
-      const isTerminated = Number(record.latest_welding_is_terminated || 0) === 1;
+      const examCount = Number(record.welding_exam_count || 0);
+      const ndtAttemptCount = Number(record.latest_welding_ndt_attempt_count || 0);
+      const isTerminated = Number(record.latest_welding_is_terminated || 0) === 1 || (examCount >= 2 && !isQualified) || (record.latest_welding_ndt_status === 'unqualified' && ndtAttemptCount === 0);
       if (isQualified || isTerminated) {
         showAlert('error', '该人员信息已锁定，不能修改');
         return;

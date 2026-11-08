@@ -1165,6 +1165,21 @@ def init_db():
         except sqlite3.OperationalError:
             pass
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_welding_skill_exams_record ON welding_skill_exams (record_id, created_at)")
+    # 自愈历史考核数据：
+    # 1) 考核次数已达 2 次且不合格的记录标记为已终止
+    # 2) 旧版探伤不合格（ndt_attempt_count = 0）或 2026-11-06 改版前的不合格记录标记为已终止
+    cursor.execute('''
+        UPDATE welding_skill_exams
+        SET is_terminated = 1
+        WHERE is_terminated = 0
+          AND (result = 'unqualified' OR ndt_status = 'unqualified')
+          AND (
+              (SELECT COUNT(*) FROM welding_skill_exams w2 WHERE w2.record_id = welding_skill_exams.record_id) >= 2
+              OR (ndt_status = 'unqualified' AND COALESCE(ndt_attempt_count, 0) = 0)
+              OR created_at < '2026-11-06 00:00:00'
+          )
+    ''')
+    conn.commit()
     
     # 自愈逻辑：给 users 增加 is_deleted 和 created_at 字段。
     # SQLite 不支持通过 ALTER TABLE 为已有表新增 CURRENT_TIMESTAMP 默认值，
@@ -2603,13 +2618,13 @@ async def update_record(
         conn.close()
         raise HTTPException(status_code=403, detail="无权修改此记录，或记录不存在")
 
-    cursor.execute("SELECT result, ndt_status, is_terminated FROM welding_skill_exams WHERE record_id = ? ORDER BY id DESC LIMIT 1", (record_id,))
+    cursor.execute("SELECT result, ndt_status, is_terminated, (SELECT COUNT(*) FROM welding_skill_exams WHERE record_id = ?) AS exam_count FROM welding_skill_exams WHERE record_id = ? ORDER BY id DESC LIMIT 1", (record_id, record_id))
     latest_exam = cursor.fetchone()
     if latest_exam:
         if latest_exam['result'] == 'qualified' and latest_exam['ndt_status'] in ('qualified', 'not_required'):
             conn.close()
             raise HTTPException(status_code=403, detail="该人员已合格，信息已锁定，不能修改")
-        if latest_exam['is_terminated']:
+        if latest_exam['is_terminated'] or int(latest_exam['exam_count'] or 0) >= 2:
             conn.close()
             raise HTTPException(status_code=403, detail="该人员考试未通过且已终止（或放弃补考），信息已锁定，不能修改")
 
